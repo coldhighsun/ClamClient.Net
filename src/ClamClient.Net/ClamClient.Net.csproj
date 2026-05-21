@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
+
+    <!-- Package identity -->
+    <PackageId>ClamClient.Net</PackageId>
+    <Authors>coldhighsun</Authors>
+    <Description>Async .NET client library for ClamAV (clamd) with TCP and Unix socket support.</Description>
+    <PackageTags>clamav;clamd;virus;scan;antivirus;security</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+    <!-- Repository -->
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/coldhighsun/ClamClient.Net</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/coldhighsun/ClamClient.Net</PackageProjectUrl>
+
+    <!-- README shown on nuget.org -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Versioning via MinVer (tag prefix: v, e.g. v1.0.0) -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <!-- Source Link — embeds source info for debugger step-through -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embed the repo README as the NuGet package readme -->
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MinVer" PrivateAssets="All" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <!-- Polyfills for netstandard2.0: Memory<T>, BinaryPrimitives, IAsyncDisposable -->
+    <PackageReference Include="System.Memory" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Condition="'$(TargetFramework)' == 'netstandard2.0'" />
+  </ItemGroup>
+</Project>

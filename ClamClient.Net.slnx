@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/.github/" />
+  <Folder Name="/.github/workflows/">
+    <File Path=".github/workflows/ci.yml" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/QuickStart/QuickStart.csproj" />
+  </Folder>
+  <Folder Name="/solution items/">
+    <File Path=".gitignore" />
+    <File Path="README.md" />
+    <File Path="CLAUDE.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/ClamClient.Net/ClamClient.Net.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClamClient.Net.Tests/ClamClient.Net.Tests.csproj" />
+  </Folder>
+</Solution>
