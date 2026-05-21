@@ -22,10 +22,10 @@ internal static class ClamResponseParser
     internal static ScanResult ParseScanResponse(string raw)
     {
         var trimmed = raw.Trim('\0', '\n', '\r');
-#if NET5_0_OR_GREATER
+#if !NETSTANDARD2_0
         var lines = trimmed.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 #else
-        var lines = trimmed.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var lines = trimmed.Split(['\n'], StringSplitOptions.RemoveEmptyEntries);
 #endif
 
         if (lines.Length == 0)
@@ -41,7 +41,9 @@ internal static class ClamResponseParser
             var l = line.TrimEnd('\r', '\0');
 
             if (l.EndsWith(" OK", StringComparison.Ordinal))
+            {
                 continue;
+            }
 
             if (l.EndsWith(" FOUND", StringComparison.Ordinal))
             {
@@ -55,13 +57,7 @@ internal static class ClamResponseParser
                     var rest = l.Substring(colonIdx + 2);
 
                     const string foundSuffix = " FOUND";
-                    var nameLength = rest.Length - foundSuffix.Length;
-                    if (nameLength <= 0)
-                    {
-                        hasError = true;
-                        continue;
-                    }
-                    var threatName = rest.Substring(0, nameLength);
+                    var threatName = rest.Substring(0, rest.Length - foundSuffix.Length);
                     threats.Add(new(fileName, threatName));
                 }
                 else
