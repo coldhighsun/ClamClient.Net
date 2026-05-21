@@ -24,12 +24,7 @@ public sealed class ClamAVClient : IClamClient
     /// </summary>
     public ClamAVClient(ClamClientOptions options)
     {
-#if NET6_0_OR_GREATER
-        ArgumentNullException.ThrowIfNull(options);
-#else
-        if (options is null) throw new ArgumentNullException(nameof(options));
-#endif
-        _options = options;
+        _options = options ?? throw new ArgumentNullException(nameof(options));
     }
 
     /// <summary>
@@ -48,11 +43,11 @@ public sealed class ClamAVClient : IClamClient
     /// <inheritdoc/>
     public async Task<ScanResult> MultiScanAsync(string filePath, CancellationToken cancellationToken = default)
     {
-#if NET7_0_OR_GREATER
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
-#else
-        if (string.IsNullOrEmpty(filePath)) throw new ArgumentException("Value cannot be null or empty.", nameof(filePath));
-#endif
+        if (string.IsNullOrEmpty(filePath))
+        {
+            throw new ArgumentException("Value cannot be null or empty.", nameof(filePath));
+        }
+
         var raw = await ExecuteCommandAsync($"MULTISCAN {filePath}", afterCommand: null, cancellationToken).ConfigureAwait(false);
         return ClamResponseParser.ParseScanResponse(raw);
     }
@@ -73,11 +68,11 @@ public sealed class ClamAVClient : IClamClient
     /// <inheritdoc/>
     public async Task<ScanResult> ScanFileAsync(string filePath, CancellationToken cancellationToken = default)
     {
-#if NET7_0_OR_GREATER
-        ArgumentException.ThrowIfNullOrEmpty(filePath);
-#else
-        if (string.IsNullOrEmpty(filePath)) throw new ArgumentException("Value cannot be null or empty.", nameof(filePath));
-#endif
+        if (string.IsNullOrEmpty(filePath))
+        {
+            throw new ArgumentException("Value cannot be null or empty.", nameof(filePath));
+        }
+
         var raw = await ExecuteCommandAsync($"SCAN {filePath}", afterCommand: null, cancellationToken).ConfigureAwait(false);
         return ClamResponseParser.ParseScanResponse(raw);
     }
@@ -85,11 +80,11 @@ public sealed class ClamAVClient : IClamClient
     /// <inheritdoc/>
     public async Task<ScanResult> ScanStreamAsync(Stream data, CancellationToken cancellationToken = default)
     {
-#if NET6_0_OR_GREATER
-        ArgumentNullException.ThrowIfNull(data);
-#else
-        if (data is null) throw new ArgumentNullException(nameof(data));
-#endif
+        if (data is null)
+        {
+            throw new ArgumentNullException(nameof(data));
+        }
+
         var raw = await ExecuteCommandAsync(
             "INSTREAM",
             (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
@@ -129,20 +124,17 @@ public sealed class ClamAVClient : IClamClient
         }
         else
         {
+            var client = new TcpClient();
+            client.SendTimeout = timeoutMs;
+            client.ReceiveTimeout = timeoutMs;
+
 #if NET5_0_OR_GREATER
-            var client = new TcpClient();
-            client.SendTimeout = timeoutMs;
-            client.ReceiveTimeout = timeoutMs;
             await client.ConnectAsync(endpoint.Host!, endpoint.Port, cancellationToken).ConfigureAwait(false);
-            return client.GetStream();
 #else
-            var client = new TcpClient();
-            client.SendTimeout = timeoutMs;
-            client.ReceiveTimeout = timeoutMs;
             // CancellationToken overload not available; connect synchronously on the thread-pool
             await Task.Run(() => client.Connect(endpoint.Host!, endpoint.Port), cancellationToken).ConfigureAwait(false);
-            return client.GetStream();
 #endif
+            return client.GetStream();
         }
     }
 
@@ -183,14 +175,15 @@ public sealed class ClamAVClient : IClamClient
             var commandBytes = Encoding.ASCII.GetBytes($"z{command}\0");
 #if NET6_0_OR_GREATER
             await stream.WriteAsync(commandBytes, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
 #else
             await stream.WriteAsync(commandBytes, 0, commandBytes.Length, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
 #endif
+            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             if (afterCommand is not null)
+            {
                 await afterCommand(stream, cancellationToken).ConfigureAwait(false);
+            }
 
             using var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
 #if NET7_0_OR_GREATER
