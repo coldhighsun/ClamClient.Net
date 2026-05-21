@@ -35,6 +35,11 @@ For stream scans: `ClamAVClient.ScanStreamAsync` uses `InStreamWriter` to frame 
 - `ScanResult` — contains `ScanStatus` enum and `IReadOnlyList<DetectedThreat>`; status priority is `ThreatFound > Error > Clean > Unknown`
 - `ClamResponseParser` — parses single-line (`OK`/`FOUND`/`ERROR`) and multi-line (`MULTISCAN`) responses; internal, exposed via `InternalsVisibleTo`
 
+**Exceptions thrown by `ClamAVClient`:**
+- `ClamConnectionException` — connection to clamd failed or was lost
+- `ClamProtocolException` — unexpected/malformed response from clamd
+- `ClamStreamSizeExceededException` — input stream exceeds `ClamClientOptions.MaxStreamSize`
+
 **DI registration:**
 ```csharp
 services.AddClamClient(options => { options.Endpoint = ClamEndpoint.Tcp("localhost", 3310); });
