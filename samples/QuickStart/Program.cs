@@ -140,9 +140,9 @@ static void PrintResult(ScanResult result)
 {
     var icon = result.Status switch
     {
-        ScanStatus.Clean => "✓",
-        ScanStatus.ThreatFound => "✗",
-        ScanStatus.Error => "!",
+        ScanStatus.Clean => "OK",
+        ScanStatus.ThreatFound => "!!",
+        ScanStatus.Error => "ERR",
         _ => "?",
     };
     Console.WriteLine($"  [{icon}] {result}");
