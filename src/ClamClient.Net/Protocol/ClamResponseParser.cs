@@ -57,7 +57,13 @@ internal static class ClamResponseParser
                     var rest = l.Substring(colonIdx + 2);
 
                     const string foundSuffix = " FOUND";
-                    var threatName = rest.Substring(0, rest.Length - foundSuffix.Length);
+                    var threatNameLength = rest.Length - foundSuffix.Length;
+                    if (threatNameLength <= 0)
+                    {
+                        return new(ScanStatus.Error, raw);
+                    }
+
+                    var threatName = rest.Substring(0, threatNameLength);
                     threats.Add(new(fileName, threatName));
                 }
                 else
