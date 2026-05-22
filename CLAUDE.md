@@ -54,6 +54,8 @@ services.AddClamClient(options => { options.Endpoint = ClamEndpoint.Tcp("localho
 - All public members require XML doc comments (`GenerateDocumentationFile=true`).
 - All async code uses `ConfigureAwait(false)`.
 - Package versions are centrally managed in `Directory.Packages.props` — add new packages there, not directly in `.csproj`.
+- The library targets `netstandard2.0` and `net8.0`. Polyfills for `Memory<T>`, `BinaryPrimitives`, and `IAsyncDisposable` are conditionally included for `netstandard2.0` via `System.Memory` and `Microsoft.Bcl.AsyncInterfaces`.
+- Versioning is handled by MinVer — git tags of the form `v1.2.3` drive the NuGet package version. Do not manually edit version properties.
 
 ## Testing Approach
 
