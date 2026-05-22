@@ -182,6 +182,9 @@ static void PrintResult(ScanResult result)
 // ----------------------------------------------------------
 internal sealed class FileUploadScanner(IClamClient clamClient)
 {
+    /// <summary>
+    /// Scans <paramref name="fileBytes"/> and returns <see langword="true"/> if no threats are detected.
+    /// </summary>
     public async Task<bool> IsSafeAsync(byte[] fileBytes, CancellationToken ct = default)
     {
         using var stream = new MemoryStream(fileBytes);
