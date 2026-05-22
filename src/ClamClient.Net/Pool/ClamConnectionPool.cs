@@ -92,8 +92,13 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
             throw new ObjectDisposedException(nameof(ClamConnectionPool));
         }
 
-        // Idle connections already hold a semaphore slot (kept when they were returned).
-        // Reuse one directly without calling WaitAsync — taking its slot from "idle" to "active".
+        // Acquire a capacity slot first; this unblocks whenever Return releases one.
+        if (_semaphore is not null)
+        {
+            await _semaphore.WaitAsync(ct).ConfigureAwait(false);
+        }
+
+        // Prefer an idle connection that became available before or after we waited.
         while (_idle.TryDequeue(out var candidate))
         {
             if (candidate.IsValid(_options.IdleConnectionTimeout))
@@ -101,15 +106,8 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
                 return candidate;
             }
 
-            // Stale — evict and release its slot so capacity stays accurate.
+            // Stale — dispose it and keep the slot we already hold for a new connection.
             _ = candidate.DisposeAsync();
-            _semaphore?.Release();
-        }
-
-        // No valid idle connection; claim a new slot before opening one.
-        if (_semaphore is not null)
-        {
-            await _semaphore.WaitAsync(ct).ConfigureAwait(false);
         }
 
         try
@@ -140,16 +138,17 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
     /// </summary>
     internal void Return(ClamConnection connection)
     {
-        if (_disposed || !connection.IsHealthy || !connection.IsValid(_options.IdleConnectionTimeout))
+        if (!_disposed && connection.IsHealthy && connection.IsValid(_options.IdleConnectionTimeout))
+        {
+            _idle.Enqueue(connection);
+        }
+        else
         {
             _ = connection.DisposeAsync();
-            _semaphore?.Release();
-            return;
         }
 
-        _idle.Enqueue(connection);
-
-        // Semaphore is NOT released — the slot remains occupied by the idle connection.
+        // Always release the slot so waiters in RentAsync can proceed.
+        _semaphore?.Release();
     }
 
     /// <summary>
