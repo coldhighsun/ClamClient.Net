@@ -1,6 +1,6 @@
 # ClamClient.Net
 
-Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with TCP and Unix socket support.
+Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with TCP and Unix socket support, and built-in connection pooling.
 
 [![CI](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml/badge.svg)](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/ClamClient.Net.svg)](https://www.nuget.org/packages/ClamClient.Net)
@@ -12,7 +12,8 @@ Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with T
 - Scan files and arbitrary byte streams via `INSTREAM`
 - TCP and Unix domain socket endpoints
 - Full async/await with `CancellationToken` support
-- Microsoft DI integration (`AddClamClient`)
+- Built-in connection pool — reuses IDSESSION connections to reduce per-request overhead
+- Microsoft DI integration (`AddClamClient`) — registers `IClamClient` as a singleton backed by the pool
 - No external runtime dependencies beyond `Microsoft.Extensions.DependencyInjection.Abstractions`
 
 ## Requirements
@@ -120,6 +121,8 @@ var options = new ClamClientOptions
 | `Timeout` | `00:00:10` | Socket connect and read timeout |
 | `ChunkSize` | `131072` (128 KB) | Max bytes per `INSTREAM` chunk |
 | `MaxStreamSize` | `26214400` (25 MB) | Hard cap on total `INSTREAM` payload |
+| `MaxConnections` | `10` | Maximum pooled connections (0 = unlimited) |
+| `IdleConnectionTimeout` | `00:00:30` | How long an idle connection is kept before eviction |
 
 ### `ScanResult`
 
@@ -145,7 +148,7 @@ MIT
 
 # ClamClient.Net（中文说明）
 
-适用于 [ClamAV](https://www.clamav.net/)（`clamd`）的异步 .NET 客户端库，支持 TCP 和 Unix 套接字。
+适用于 [ClamAV](https://www.clamav.net/)（`clamd`）的异步 .NET 客户端库，支持 TCP 和 Unix 套接字，内置连接池。
 
 [![CI](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml/badge.svg)](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/ClamClient.Net.svg)](https://www.nuget.org/packages/ClamClient.Net)
@@ -157,7 +160,8 @@ MIT
 - 通过 `INSTREAM` 扫描文件及任意字节流
 - 支持 TCP 和 Unix 域套接字端点
 - 完整的 async/await 支持，含 `CancellationToken`
-- Microsoft DI 集成（`AddClamClient`）
+- 内置连接池——复用 IDSESSION 连接，降低每次请求的开销
+- Microsoft DI 集成（`AddClamClient`）——将 `IClamClient` 注册为由连接池支撑的单例
 - 除 `Microsoft.Extensions.DependencyInjection.Abstractions` 外无额外运行时依赖
 
 ## 环境要求
@@ -265,6 +269,8 @@ var options = new ClamClientOptions
 | `Timeout` | `00:00:10` | 套接字连接及读取超时 |
 | `ChunkSize` | `131072`（128 KB） | `INSTREAM` 每块最大字节数 |
 | `MaxStreamSize` | `26214400`（25 MB） | `INSTREAM` 总负载硬性上限 |
+| `MaxConnections` | `10` | 最大连接池连接数（0 表示不限制） |
+| `IdleConnectionTimeout` | `00:00:30` | 空闲连接在被回收前的最长保留时间 |
 
 ### `ScanResult`
 

@@ -10,7 +10,7 @@ namespace ClamClient.Net.Extensions;
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers <see cref="IClamClient"/> as a transient service.
+    /// Registers <see cref="IClamClient"/> as a singleton backed by a connection pool.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional delegate to configure <see cref="ClamClientOptions"/>.</param>
@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
         var options = new ClamClientOptions();
         configure?.Invoke(options);
         services.AddSingleton(options);
-        services.AddTransient<IClamClient, ClamAVClient>();
+        services.AddSingleton<IClamClient, ClamAVClient>();
         return services;
     }
 }

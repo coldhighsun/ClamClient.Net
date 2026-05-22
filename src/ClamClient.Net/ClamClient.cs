@@ -1,18 +1,18 @@
 using ClamClient.Net.Abstractions;
 using ClamClient.Net.Configuration;
 using ClamClient.Net.Exceptions;
+using ClamClient.Net.Pool;
 using ClamClient.Net.Protocol;
 using ClamClient.Net.Results;
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Sockets;
-using System.Text;
 
 namespace ClamClient.Net;
 
 /// <summary>
 /// Default implementation of <see cref="IClamClient"/>.
 /// </summary>
-public sealed class ClamAVClient : IClamClient
+public sealed class ClamAVClient : IClamClient, IAsyncDisposable
 {
     /// <summary>
     /// Provides configuration options for the ClamAV client.
@@ -20,11 +20,17 @@ public sealed class ClamAVClient : IClamClient
     private readonly ClamClientOptions _options;
 
     /// <summary>
+    /// Manages a pool of connections to the clamd server for efficient reuse across multiple operations.
+    /// </summary>
+    private readonly ClamConnectionPool _pool;
+
+    /// <summary>
     /// Initializes a new instance with the supplied options.
     /// </summary>
     public ClamAVClient(ClamClientOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _pool = new ClamConnectionPool(options, ConnectAsync);
     }
 
     /// <summary>
@@ -33,12 +39,15 @@ public sealed class ClamAVClient : IClamClient
     public ClamAVClient() : this(new()) { }
 
     /// <inheritdoc/>
+    public ValueTask DisposeAsync() => _pool.DisposeAsync();
+
+    /// <inheritdoc/>
     public Task<string> GetStatsAsync(CancellationToken cancellationToken = default) =>
-        ExecuteCommandAsync("STATS", afterCommand: null, cancellationToken);
+        ExecuteCommandAsync(ClamConnection.StatsBytes, afterCommand: null, cancellationToken);
 
     /// <inheritdoc/>
     public Task<string> GetVersionAsync(CancellationToken cancellationToken = default) =>
-        ExecuteCommandAsync("VERSION", afterCommand: null, cancellationToken);
+        ExecuteCommandAsync(ClamConnection.VersionBytes, afterCommand: null, cancellationToken);
 
     /// <inheritdoc/>
     public async Task<ScanResult> MultiScanAsync(string filePath, CancellationToken cancellationToken = default)
@@ -55,14 +64,14 @@ public sealed class ClamAVClient : IClamClient
     /// <inheritdoc/>
     public async Task<bool> PingAsync(CancellationToken cancellationToken = default)
     {
-        var raw = await ExecuteCommandAsync("PING", afterCommand: null, cancellationToken).ConfigureAwait(false);
+        var raw = await ExecuteCommandAsync(ClamConnection.PingBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
         return ClamResponseParser.IsPong(raw);
     }
 
     /// <inheritdoc/>
     public async Task ReloadAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteCommandAsync("RELOAD", afterCommand: null, cancellationToken).ConfigureAwait(false);
+        await ExecuteCommandAsync(ClamConnection.ReloadBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -86,7 +95,7 @@ public sealed class ClamAVClient : IClamClient
         }
 
         var raw = await ExecuteCommandAsync(
-            "INSTREAM",
+            ClamConnection.InStreamBytes,
             (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
             cancellationToken).ConfigureAwait(false);
         return ClamResponseParser.ParseScanResponse(raw);
@@ -95,14 +104,14 @@ public sealed class ClamAVClient : IClamClient
     /// <inheritdoc/>
     public async Task ShutdownAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteCommandAsync("SHUTDOWN", afterCommand: null, cancellationToken).ConfigureAwait(false);
+        await ExecuteCommandAsync(ClamConnection.ShutdownBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Establishes a connection to the clamd server based on the configured endpoint.
+    /// Establishes a raw connection to the clamd server based on the configured endpoint.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A stream representing the connection to the clamd server.</returns>
+    /// <returns>A stream representing the open connection.</returns>
     [SuppressMessage("Reliability", "CA2000", Justification = "Ownership transferred to NetworkStream via ownsSocket: true")]
     private async Task<Stream> ConnectAsync(CancellationToken cancellationToken)
     {
@@ -111,7 +120,7 @@ public sealed class ClamAVClient : IClamClient
 
         if (endpoint.IsUnixSocket)
         {
-#if NET5_0_OR_GREATER
+#if !NETSTANDARD2_0
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             socket.SendTimeout = timeoutMs;
             socket.ReceiveTimeout = timeoutMs;
@@ -128,7 +137,7 @@ public sealed class ClamAVClient : IClamClient
             client.SendTimeout = timeoutMs;
             client.ReceiveTimeout = timeoutMs;
 
-#if NET5_0_OR_GREATER
+#if !NETSTANDARD2_0
             await client.ConnectAsync(endpoint.Host!, endpoint.Port, cancellationToken).ConfigureAwait(false);
 #else
             // CancellationToken overload not available; connect synchronously on the thread-pool
@@ -139,59 +148,65 @@ public sealed class ClamAVClient : IClamClient
     }
 
     /// <summary>
-    /// Sends a command to the ClamAV daemon asynchronously and returns the response.
+    /// Rents a pooled connection, sends a pre-encoded fixed command, and returns the connection to the pool.
     /// </summary>
-    /// <param name="command">The command to send to the ClamAV daemon.</param>
-    /// <param name="afterCommand">An optional delegate to execute after sending the command.</param>
+    /// <param name="commandBytes">The pre-encoded wire bytes for the command.</param>
+    /// <param name="afterCommand">Optional delegate invoked after the command is written, e.g. to stream data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task representing the asynchronous operation, containing the response from the ClamAV daemon.</returns>
-    /// <exception cref="ClamConnectionException">Thrown when a connection to the ClamAV daemon cannot be established.</exception>
+    /// <returns>The null-terminated response string from clamd.</returns>
+    private async Task<string> ExecuteCommandAsync(
+        byte[] commandBytes,
+        Func<Stream, CancellationToken, Task>? afterCommand,
+        CancellationToken cancellationToken)
+    {
+        var connection = await _pool.RentAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await connection.ExecuteAsync(commandBytes, afterCommand, cancellationToken).ConfigureAwait(false);
+        }
+        catch (SocketException ex)
+        {
+            throw new ClamConnectionException($"Lost connection to clamd at {_options.Endpoint}.", ex);
+        }
+        catch (IOException ex)
+        {
+            throw new ClamConnectionException($"Lost connection to clamd at {_options.Endpoint}.", ex);
+        }
+        finally
+        {
+            _pool.Return(connection);
+        }
+    }
+
+    /// <summary>
+    /// Rents a pooled connection, sends a dynamic command string, and returns the connection to the pool.
+    /// Used for commands that carry a file path argument (SCAN, MULTISCAN).
+    /// </summary>
+    /// <param name="command">The command name and arguments to send (without the z-prefix or null terminator).</param>
+    /// <param name="afterCommand">Optional delegate invoked after the command is written, e.g. to stream data.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The null-terminated response string from clamd.</returns>
     private async Task<string> ExecuteCommandAsync(
         string command,
         Func<Stream, CancellationToken, Task>? afterCommand,
         CancellationToken cancellationToken)
     {
-        Stream stream;
+        var connection = await _pool.RentAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            stream = await ConnectAsync(cancellationToken).ConfigureAwait(false);
+            return await connection.ExecuteAsync(command, afterCommand, cancellationToken).ConfigureAwait(false);
         }
         catch (SocketException ex)
         {
-            throw new ClamConnectionException($"Failed to connect to clamd at {_options.Endpoint}.", ex);
+            throw new ClamConnectionException($"Lost connection to clamd at {_options.Endpoint}.", ex);
         }
         catch (IOException ex)
         {
-            throw new ClamConnectionException($"Failed to connect to clamd at {_options.Endpoint}.", ex);
+            throw new ClamConnectionException($"Lost connection to clamd at {_options.Endpoint}.", ex);
         }
-
-#if NET6_0_OR_GREATER
-        await using (stream.ConfigureAwait(false))
-#else
-        using (stream)
-#endif
+        finally
         {
-            // z-prefix: clamd uses null-terminated framing throughout
-            var commandBytes = Encoding.ASCII.GetBytes($"z{command}\0");
-#if NET6_0_OR_GREATER
-            await stream.WriteAsync(commandBytes, cancellationToken).ConfigureAwait(false);
-#else
-            await stream.WriteAsync(commandBytes, 0, commandBytes.Length, cancellationToken).ConfigureAwait(false);
-#endif
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-
-            if (afterCommand is not null)
-            {
-                await afterCommand(stream, cancellationToken).ConfigureAwait(false);
-            }
-
-            using var reader = new StreamReader(stream, Encoding.ASCII, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
-#if NET7_0_OR_GREATER
-            var response = await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-#else
-            var response = await reader.ReadToEndAsync().ConfigureAwait(false);
-#endif
-            return response.TrimEnd('\0');
+            _pool.Return(connection);
         }
     }
 }
