@@ -5,7 +5,7 @@
     <!-- Package identity -->
     <PackageId>ClamClient.Net</PackageId>
     <Authors>coldhighsun</Authors>
-    <Description>Async .NET client library for ClamAV (clamd) with TCP and Unix socket support.</Description>
+    <Description>Async .NET client library for ClamAV (clamd) with TCP and Unix socket support, and built-in connection pooling.</Description>
     <PackageTags>clamav;clamd;virus;scan;antivirus;security</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 

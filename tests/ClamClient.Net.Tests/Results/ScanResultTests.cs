@@ -6,6 +6,15 @@ namespace ClamClient.Net.Tests.Results;
 public sealed class ScanResultTests
 {
     [Fact]
+    public void DetectedThreat_IsValueEqual()
+    {
+        var a = new DetectedThreat("file.exe", "Trojan.Generic");
+        var b = new DetectedThreat("file.exe", "Trojan.Generic");
+
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
     public void ScanResult_Clean_HasEmptyThreats()
     {
         var result = ClamResponseParser.ParseScanResponse("stream: OK");
@@ -22,15 +31,6 @@ public sealed class ScanResultTests
         Assert.Equal(ScanStatus.ThreatFound, result.Status);
         Assert.Single(result.Threats);
         Assert.Equal("Eicar", result.Threats[0].ThreatName);
-    }
-
-    [Fact]
-    public void DetectedThreat_IsValueEqual()
-    {
-        var a = new DetectedThreat("file.exe", "Trojan.Generic");
-        var b = new DetectedThreat("file.exe", "Trojan.Generic");
-
-        Assert.Equal(a, b);
     }
 
     [Fact]

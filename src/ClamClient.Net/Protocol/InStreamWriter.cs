@@ -24,10 +24,10 @@ internal static class InStreamWriter
         long totalBytes = 0;
 
         int bytesRead;
-#if NETSTANDARD2_0
-        while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
-#else
+#if !NETSTANDARD2_0
         while ((bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+#else
+        while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) > 0)
 #endif
         {
             totalBytes += bytesRead;
@@ -37,21 +37,21 @@ internal static class InStreamWriter
             }
 
             BinaryPrimitives.WriteUInt32BigEndian(lengthBuffer, (uint)bytesRead);
-#if NETSTANDARD2_0
-            await destination.WriteAsync(lengthBuffer, 0, lengthBuffer.Length, cancellationToken).ConfigureAwait(false);
-            await destination.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
-#else
+#if !NETSTANDARD2_0
             await destination.WriteAsync(lengthBuffer, cancellationToken).ConfigureAwait(false);
             await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+#else
+            await destination.WriteAsync(lengthBuffer, 0, lengthBuffer.Length, cancellationToken).ConfigureAwait(false);
+            await destination.WriteAsync(buffer, 0, bytesRead, cancellationToken).ConfigureAwait(false);
 #endif
         }
 
         // Zero-length chunk signals end of stream to clamd
         Array.Clear(lengthBuffer, 0, 4);
-#if NETSTANDARD2_0
-        await destination.WriteAsync(lengthBuffer, 0, lengthBuffer.Length, cancellationToken).ConfigureAwait(false);
-#else
+#if !NETSTANDARD2_0
         await destination.WriteAsync(lengthBuffer, cancellationToken).ConfigureAwait(false);
+#else
+        await destination.WriteAsync(lengthBuffer, 0, lengthBuffer.Length, cancellationToken).ConfigureAwait(false);
 #endif
         await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
     }

@@ -17,6 +17,16 @@ public sealed class ClamClientOptions
     public ClamEndpoint Endpoint { get; set; } = ClamEndpoint.Tcp("localhost");
 
     /// <summary>
+    /// How long an idle connection may remain in the pool before being evicted. Defaults to 30 seconds.
+    /// </summary>
+    public TimeSpan IdleConnectionTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Maximum number of pooled connections. 0 means unlimited. Defaults to 10.
+    /// </summary>
+    public int MaxConnections { get; set; } = 10;
+
+    /// <summary>
     /// Hard cap on total INSTREAM payload size. Defaults to 25 MB.
     /// </summary>
     public long MaxStreamSize { get; set; } = 25L * 1024 * 1024;
