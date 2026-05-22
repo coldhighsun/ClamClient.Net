@@ -32,13 +32,15 @@ For stream scans: `ClamAVClient.ScanStreamAsync` uses `InStreamWriter` to frame 
 **Key types:**
 - `IClamClient` — public contract; all async methods return `ScanResult` or primitive values
 - `ClamAVClient` — implementation; owns a `ClamConnectionPool` and delegates all sends through it; two `ExecuteCommandAsync` overloads — one for pre-encoded `byte[]` commands, one for dynamic string commands (SCAN, MULTISCAN)
-- `ClamClientOptions` — timeout, chunk size, max stream size, pool settings (`Timeout`, `ChunkSize`, `MaxStreamSize`, `MaxConnections`, `IdleConnectionTimeout`); defaults: endpoint `localhost:3310`, chunk size 128 KB, max stream size 25 MB, timeout 10 s, max connections 10, idle timeout 30 s
+- `ClamClientOptions` — timeout, chunk size, max stream size, pool settings (`Timeout`, `ChunkSize`, `MaxStreamSize`, `MaxConnections`, `IdleConnectionTimeout`); defaults: endpoint `localhost:3310`, chunk size 128 KB, max stream size 25 MB, timeout 10 s, max connections 10, idle timeout 30 s; `MaxConnections = 0` disables the semaphore cap (unlimited connections)
 - `ClamEndpoint` — discriminated union of TCP (`Host`/`Port`) or Unix domain socket (`SocketPath`)
 - `ScanResult` — contains `ScanStatus` enum and `IReadOnlyList<DetectedThreat>`; status priority is `ThreatFound > Error > Clean > Unknown`
 - `DetectedThreat` — `sealed record` with positional parameters `(FileName, ThreatName)`; value equality is intentional and relied on by tests
 - `ClamResponseParser` — parses single-line (`OK`/`FOUND`/`ERROR`) and multi-line (`MULTISCAN`) responses; internal, exposed via `InternalsVisibleTo`
 - `ClamConnectionPool` (`Pool/`) — manages idle `ClamConnection`s; `SemaphoreSlim` caps concurrent connections; `ConcurrentQueue<ClamConnection>` holds idle ones; semaphore slot stays occupied while a connection is idle and is only released on eviction or unhealthy return; internal
 - `ClamConnection` (`Pool/`) — wraps a stream in IDSESSION mode; exposes `ExecuteAsync` (both `byte[]` and `string` overloads); strips numeric IDSESSION response prefixes (`N: `) via `StripIdSessionPrefixes`; reads into a 4 KB `_readBuffer` with `MemoryStream` overflow for long responses (e.g. STATS); tracks `LastUsedAt` for idle eviction; internal
+
+**Stale-connection retry:** All `ClamAVClient` methods automatically retry once on `ClamConnectionException` (the failed connection is evicted, a fresh one is opened). `ScanStreamAsync` only retries when the stream is seekable (position is reset to the original value before retrying).
 
 **Exceptions thrown by `ClamAVClient`:**
 - `ClamConnectionException` — connection to clamd failed or was lost
@@ -58,7 +60,7 @@ services.AddClamClient(options => { options.Endpoint = ClamEndpoint.Tcp("localho
 
 - All compiler warnings are errors (`TreatWarningsAsErrors=true`).
 - Nullable reference types and implicit usings are enabled project-wide.
-- All public members require XML doc comments (`GenerateDocumentationFile=true`).
+- All members require XML doc comments — including `private` and `internal`, not just public ones. Always use the three-line `/// <summary>` format; never the single-line collapsed form. Add `<param>` and `<returns>` tags for non-obvious parameters/return values. (`GenerateDocumentationFile=true` enforces this for public members at build time.)
 - All async code uses `ConfigureAwait(false)`.
 - Package versions are centrally managed in `Directory.Packages.props` — add new packages there, not directly in `.csproj`.
 - The library targets `netstandard2.0` and `net8.0`. Polyfills for `Memory<T>`, `BinaryPrimitives`, and `IAsyncDisposable` are conditionally included for `netstandard2.0` via `System.Memory` and `Microsoft.Bcl.AsyncInterfaces`.

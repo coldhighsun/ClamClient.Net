@@ -92,12 +92,8 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
             throw new ObjectDisposedException(nameof(ClamConnectionPool));
         }
 
-        if (_semaphore is not null)
-        {
-            await _semaphore.WaitAsync(ct).ConfigureAwait(false);
-        }
-
-        // Try to reuse an idle connection, discarding stale ones.
+        // Idle connections already hold a semaphore slot (kept when they were returned).
+        // Reuse one directly without calling WaitAsync — taking its slot from "idle" to "active".
         while (_idle.TryDequeue(out var candidate))
         {
             if (candidate.IsValid(_options.IdleConnectionTimeout))
@@ -105,11 +101,17 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
                 return candidate;
             }
 
-            // Stale — discard but keep the semaphore slot for the new connection below.
+            // Stale — evict and release its slot so capacity stays accurate.
             _ = candidate.DisposeAsync();
+            _semaphore?.Release();
         }
 
-        // No valid idle connection; open a new one.
+        // No valid idle connection; claim a new slot before opening one.
+        if (_semaphore is not null)
+        {
+            await _semaphore.WaitAsync(ct).ConfigureAwait(false);
+        }
+
         try
         {
             var stream = await _streamFactory(ct).ConfigureAwait(false);
