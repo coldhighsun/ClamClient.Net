@@ -98,6 +98,29 @@ var options = new ClamClientOptions
 
 > Unix domain sockets require .NET 5 or later.
 
+## Connection pool
+
+`ClamAVClient` owns an internal pool of IDSESSION connections. Each connection sends `zIDSESSION\0` once on open and remains open for subsequent commands, eliminating the TCP handshake and ClamAV session-setup cost on every scan.
+
+**How it works:**
+
+- When a command is issued, the pool hands out an idle connection or opens a new one.
+- While a connection is in use, it occupies one slot toward `MaxConnections`.
+- When the call returns, the connection is checked back in and reused by the next caller.
+- When all slots are occupied, further callers wait until a connection becomes available (subject to the operation's `CancellationToken`).
+- Connections idle for longer than `IdleConnectionTimeout` are evicted and closed automatically.
+
+**Tuning:**
+
+| Scenario | Recommendation |
+|----------|----------------|
+| Low-traffic service | Leave defaults (`MaxConnections = 10`, `IdleConnectionTimeout = 30 s`) |
+| High-throughput upload service | Raise `MaxConnections` to match expected concurrency |
+| Short-lived process / batch job | Lower `IdleConnectionTimeout` so connections close promptly after the burst |
+| Unlimited connections | Set `MaxConnections = 0` |
+
+Dispose `ClamAVClient` (or the DI container) when the application exits — this sends `zEND\0` on every idle connection and closes the pool cleanly.
+
 ## API reference
 
 ### `IClamClient`
@@ -245,6 +268,29 @@ var options = new ClamClientOptions
 ```
 
 > Unix 域套接字需要 .NET 5 或更高版本。
+
+## 连接池
+
+`ClamAVClient` 内部维护一个 IDSESSION 连接池。每条连接在打开时发送一次 `zIDSESSION\0` 并保持不关闭，后续命令复用同一连接，从而消除每次扫描的 TCP 握手和 ClamAV 会话建立开销。
+
+**工作原理：**
+
+- 发出命令时，连接池提供一个空闲连接，若无空闲则新建连接。
+- 连接使用中时，占用 `MaxConnections` 计数中的一个槽位。
+- 调用返回后，连接归还连接池，供下一个调用方复用。
+- 所有槽位均已占用时，后续调用方等待，直到有连接释放（受操作的 `CancellationToken` 控制）。
+- 空闲时长超过 `IdleConnectionTimeout` 的连接会被自动驱逐并关闭。
+
+**调优建议：**
+
+| 场景 | 建议 |
+|------|------|
+| 低流量服务 | 保留默认值（`MaxConnections = 10`，`IdleConnectionTimeout = 30 s`） |
+| 高吞吐上传服务 | 将 `MaxConnections` 调高至与预期并发数匹配 |
+| 短生命周期进程 / 批处理任务 | 降低 `IdleConnectionTimeout`，使连接在突发流量后尽快关闭 |
+| 不限连接数 | 设置 `MaxConnections = 0` |
+
+应用退出时请 Dispose `ClamAVClient`（或 DI 容器）——这会向所有空闲连接发送 `zEND\0` 并干净地关闭连接池。
 
 ## API 参考
 

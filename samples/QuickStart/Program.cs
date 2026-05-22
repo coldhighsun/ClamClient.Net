@@ -131,7 +131,36 @@ var safe = await scanner.IsSafeAsync(uploadedFile);
 Console.WriteLine($"  Uploaded file is {(safe ? "safe" : "INFECTED")}.");
 
 Console.WriteLine();
+
+// ----------------------------------------------------------
+// Example 7: Concurrent scans — connection pool in action
+// ----------------------------------------------------------
+Console.WriteLine("--- Example 7: Concurrent scans (connection pool) ---");
+
+// Simulate 5 concurrent upload scans. The pool hands out up to MaxConnections
+// connections in parallel; callers beyond the cap wait until one is returned.
+var payloads = new[]
+{
+    "file content A"u8.ToArray(),
+    "file content B"u8.ToArray(),
+    "file content C"u8.ToArray(),
+    "file content D"u8.ToArray(),
+    "file content E"u8.ToArray(),
+};
+
+var concurrentTasks = payloads.Select(async (bytes, i) =>
+{
+    using var ms = new MemoryStream(bytes);
+    var result = await client.ScanStreamAsync(ms);
+    Console.WriteLine($"  Stream {i + 1}: [{(result.Status == ScanStatus.Clean ? "OK" : "!!")}] {result.Status}");
+});
+
+await Task.WhenAll(concurrentTasks);
+
+Console.WriteLine();
 Console.WriteLine("Done.");
+
+return;
 
 // ----------------------------------------------------------
 // Helper

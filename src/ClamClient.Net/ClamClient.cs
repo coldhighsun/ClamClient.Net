@@ -94,11 +94,26 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             throw new ArgumentNullException(nameof(data));
         }
 
-        var raw = await ExecuteCommandAsync(
-            ClamConnection.InStreamBytes,
-            (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
-            cancellationToken).ConfigureAwait(false);
-        return ClamResponseParser.ParseScanResponse(raw);
+        var startPosition = data.CanSeek ? data.Position : -1L;
+
+        try
+        {
+            var raw = await ExecuteOnceAsync(
+                ClamConnection.InStreamBytes,
+                (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
+                cancellationToken).ConfigureAwait(false);
+            return ClamResponseParser.ParseScanResponse(raw);
+        }
+        catch (ClamConnectionException) when (startPosition >= 0)
+        {
+            // Stale pooled connection — reset the stream and retry with a fresh connection.
+            data.Position = startPosition;
+            var raw = await ExecuteOnceAsync(
+                ClamConnection.InStreamBytes,
+                (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
+                cancellationToken).ConfigureAwait(false);
+            return ClamResponseParser.ParseScanResponse(raw);
+        }
     }
 
     /// <inheritdoc/>
@@ -149,6 +164,8 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
 
     /// <summary>
     /// Rents a pooled connection, sends a pre-encoded fixed command, and returns the connection to the pool.
+    /// Retries once with a fresh connection when <paramref name="afterCommand"/> is <see langword="null"/>
+    /// and the pooled connection turns out to be stale (e.g. dropped by clamd after a RELOAD).
     /// </summary>
     /// <param name="commandBytes">The pre-encoded wire bytes for the command.</param>
     /// <param name="afterCommand">Optional delegate invoked after the command is written, e.g. to stream data.</param>
@@ -159,10 +176,54 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
         Func<Stream, CancellationToken, Task>? afterCommand,
         CancellationToken cancellationToken)
     {
-        var connection = await _pool.RentAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            return await connection.ExecuteAsync(commandBytes, afterCommand, cancellationToken).ConfigureAwait(false);
+            return await ExecuteOnceAsync(commandBytes, afterCommand, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ClamConnectionException) when (afterCommand is null)
+        {
+            // Stale pooled connection — the failed connection was already evicted; retry with a fresh one.
+            return await ExecuteOnceAsync(commandBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Rents a pooled connection, sends a dynamic command string, and returns the connection to the pool.
+    /// Retries once with a fresh connection if the pooled connection is stale.
+    /// Used for commands that carry a file path argument (SCAN, MULTISCAN).
+    /// </summary>
+    /// <param name="command">The command name and arguments to send (without the z-prefix or null terminator).</param>
+    /// <param name="afterCommand">Optional delegate invoked after the command is written, e.g. to stream data.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The null-terminated response string from clamd.</returns>
+    private async Task<string> ExecuteCommandAsync(
+        string command,
+        Func<Stream, CancellationToken, Task>? afterCommand,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await ExecuteOnceAsync(command, afterCommand, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ClamConnectionException)
+        {
+            // Stale pooled connection — retry once with a fresh one.
+            return await ExecuteOnceAsync(command, afterCommand, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Single attempt: rents a connection, executes the pre-encoded command, returns the connection to the pool.
+    /// </summary>
+    private async Task<string> ExecuteOnceAsync(
+        byte[] commandBytes,
+        Func<Stream, CancellationToken, Task>? afterCommand,
+        CancellationToken ct)
+    {
+        var connection = await _pool.RentAsync(ct).ConfigureAwait(false);
+        try
+        {
+            return await connection.ExecuteAsync(commandBytes, afterCommand, ct).ConfigureAwait(false);
         }
         catch (SocketException ex)
         {
@@ -179,22 +240,17 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     }
 
     /// <summary>
-    /// Rents a pooled connection, sends a dynamic command string, and returns the connection to the pool.
-    /// Used for commands that carry a file path argument (SCAN, MULTISCAN).
+    /// Single attempt: rents a connection, executes the dynamic string command, returns the connection to the pool.
     /// </summary>
-    /// <param name="command">The command name and arguments to send (without the z-prefix or null terminator).</param>
-    /// <param name="afterCommand">Optional delegate invoked after the command is written, e.g. to stream data.</param>
-    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>The null-terminated response string from clamd.</returns>
-    private async Task<string> ExecuteCommandAsync(
+    private async Task<string> ExecuteOnceAsync(
         string command,
         Func<Stream, CancellationToken, Task>? afterCommand,
-        CancellationToken cancellationToken)
+        CancellationToken ct)
     {
-        var connection = await _pool.RentAsync(cancellationToken).ConfigureAwait(false);
+        var connection = await _pool.RentAsync(ct).ConfigureAwait(false);
         try
         {
-            return await connection.ExecuteAsync(command, afterCommand, cancellationToken).ConfigureAwait(false);
+            return await connection.ExecuteAsync(command, afterCommand, ct).ConfigureAwait(false);
         }
         catch (SocketException ex)
         {
