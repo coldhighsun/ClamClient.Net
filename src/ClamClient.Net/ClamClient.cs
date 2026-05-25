@@ -112,7 +112,9 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
         }
         catch (ClamConnectionException) when (startPosition >= 0)
         {
-            // Stale pooled connection — reset the stream and retry with a fresh connection.
+            // Stale pooled connection — safe to retry: ExecuteOnceAsync's finally block evicts the
+            // failed connection via _pool.Return, so the retry always opens a brand-new TCP connection
+            // and a fresh IDSESSION. ClamAV never sees data from the dead connection.
             data.Position = startPosition;
             var raw = await ExecuteOnceAsync(
                 ClamConnection.InStreamBytes,
