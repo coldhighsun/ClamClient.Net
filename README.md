@@ -14,7 +14,7 @@ Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with T
 - Full async/await with `CancellationToken` support
 - Built-in connection pool — reuses IDSESSION connections to reduce per-request overhead
 - Microsoft DI integration (`AddClamClient`) — registers `IClamClient` as a singleton backed by the pool
-- No external runtime dependencies beyond `Microsoft.Extensions.DependencyInjection.Abstractions`
+- No external runtime dependencies beyond `Microsoft.Extensions.DependencyInjection.Abstractions` and `Microsoft.Extensions.Options`
 
 ## Requirements
 
@@ -86,6 +86,8 @@ public class UploadService(IClamClient clamClient)
     }
 }
 ```
+
+`AddClamClient` also registers `IOptions<ClamClientOptions>`, so you can inject it directly if you need to read the resolved options at runtime.
 
 ### Unix domain socket (Linux / macOS)
 
@@ -185,7 +187,7 @@ MIT
 - 完整的 async/await 支持，含 `CancellationToken`
 - 内置连接池——复用 IDSESSION 连接，降低每次请求的开销
 - Microsoft DI 集成（`AddClamClient`）——将 `IClamClient` 注册为由连接池支撑的单例
-- 除 `Microsoft.Extensions.DependencyInjection.Abstractions` 外无额外运行时依赖
+- 除 `Microsoft.Extensions.DependencyInjection.Abstractions` 和 `Microsoft.Extensions.Options` 外无额外运行时依赖
 
 ## 环境要求
 
@@ -257,6 +259,8 @@ public class UploadService(IClamClient clamClient)
     }
 }
 ```
+
+`AddClamClient` 同时注册了 `IOptions<ClamClientOptions>`，如需在运行时读取已解析的选项，可直接注入它。
 
 ### Unix 域套接字（Linux / macOS）
 

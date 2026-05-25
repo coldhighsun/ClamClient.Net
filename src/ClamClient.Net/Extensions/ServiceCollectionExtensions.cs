@@ -1,6 +1,7 @@
 using ClamClient.Net.Abstractions;
 using ClamClient.Net.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace ClamClient.Net.Extensions;
 
@@ -18,10 +19,20 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<ClamClientOptions>? configure = null)
     {
-        var options = new ClamClientOptions();
-        configure?.Invoke(options);
-        services.AddSingleton(options);
-        services.AddSingleton<IClamClient, ClamAVClient>();
+        if (configure is not null)
+        {
+            services.Configure(configure);
+        }
+        else
+        {
+            services.AddOptions<ClamClientOptions>();
+        }
+
+        services.AddSingleton<IClamClient>(provider =>
+        {
+            var options = provider.GetRequiredService<IOptions<ClamClientOptions>>().Value;
+            return new ClamAVClient(options);
+        });
         return services;
     }
 }

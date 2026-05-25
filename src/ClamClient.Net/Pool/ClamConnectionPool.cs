@@ -148,7 +148,17 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
         }
 
         // Always release the slot so waiters in RentAsync can proceed.
-        _semaphore?.Release();
+        // Guard against ObjectDisposedException if Return is called after pool disposal.
+        if (_semaphore is not null && !_disposed)
+        {
+            try
+            {
+                _semaphore.Release();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
     }
 
     /// <summary>
