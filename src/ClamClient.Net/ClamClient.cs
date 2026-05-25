@@ -69,9 +69,9 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     }
 
     /// <inheritdoc/>
-    public async Task ReloadAsync(CancellationToken cancellationToken = default)
+    public Task ReloadAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteCommandAsync(ClamConnection.ReloadBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
+        return ExecuteCommandAsync(ClamConnection.ReloadBytes, afterCommand: null, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -125,9 +125,9 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     }
 
     /// <inheritdoc/>
-    public async Task ShutdownAsync(CancellationToken cancellationToken = default)
+    public Task ShutdownAsync(CancellationToken cancellationToken = default)
     {
-        await ExecuteCommandAsync(ClamConnection.ShutdownBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
+        return ExecuteCommandAsync(ClamConnection.ShutdownBytes, afterCommand: null, cancellationToken);
     }
 
     /// <summary>
