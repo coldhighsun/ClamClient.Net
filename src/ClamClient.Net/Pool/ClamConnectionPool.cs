@@ -107,7 +107,7 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
             }
 
             // Stale — dispose it and keep the slot we already hold for a new connection.
-            _ = candidate.DisposeAsync();
+            await candidate.DisposeAsync().ConfigureAwait(false);
         }
 
         try
