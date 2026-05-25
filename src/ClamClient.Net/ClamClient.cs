@@ -104,6 +104,12 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
                 cancellationToken).ConfigureAwait(false);
             return ClamResponseParser.ParseScanResponse(raw);
         }
+        catch (ClamConnectionException ex) when (startPosition < 0)
+        {
+            // Non-seekable stream — cannot retry after a stale connection failure.
+            throw new ClamConnectionException(
+                "Lost connection to clamd and the stream is not seekable; retry is not possible.", ex);
+        }
         catch (ClamConnectionException) when (startPosition >= 0)
         {
             // Stale pooled connection — reset the stream and retry with a fresh connection.
