@@ -42,4 +42,16 @@ public sealed class ScanResultTests
         Assert.Contains("Eicar-Test-Signature", str);
         Assert.Contains("ThreatFound", str);
     }
+
+    [Fact]
+    public void ScanResult_ToString_WhenNoThreats_IncludesRawResponse()
+    {
+        // When the scan is clean (no threats), ToString should fall back to the raw response string.
+        const string raw = "stream: OK";
+        var result = ClamResponseParser.ParseScanResponse(raw);
+
+        var str = result.ToString();
+        Assert.Contains("Clean", str);
+        Assert.Contains(raw, str);
+    }
 }

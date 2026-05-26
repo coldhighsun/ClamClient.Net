@@ -60,6 +60,19 @@ public sealed class ClamResponseParserTests
     }
 
     [Fact]
+    public void ParseScanResponse_FoundLineWithNoColon_AddsEmptyFileName()
+    {
+        // A FOUND line that contains no ": " separator — the entire line becomes the threat name
+        // and the file name is treated as empty string.
+        var result = ClamResponseParser.ParseScanResponse("SomeThreat FOUND");
+
+        Assert.Equal(ScanStatus.ThreatFound, result.Status);
+        Assert.Single(result.Threats);
+        Assert.Equal(string.Empty, result.Threats[0].FileName);
+        Assert.Equal("SomeThreat FOUND", result.Threats[0].ThreatName);
+    }
+
+    [Fact]
     public void ParseScanResponse_MalformedFoundWithNoThreatName_ReturnsError()
     {
         // A malformed response where there is no threat name before FOUND
@@ -119,5 +132,15 @@ public sealed class ClamResponseParserTests
         Assert.Single(result.Threats);
         Assert.Equal("stream", result.Threats[0].FileName);
         Assert.Equal("Eicar-Test-Signature", result.Threats[0].ThreatName);
+    }
+
+    [Fact]
+    public void ParseScanResponse_UnrecognisedLine_ReturnsErrorStatus()
+    {
+        // A line that doesn't end with OK, FOUND, or ERROR is treated as an error.
+        var result = ClamResponseParser.ParseScanResponse("some unexpected response");
+
+        Assert.Equal(ScanStatus.Error, result.Status);
+        Assert.Empty(result.Threats);
     }
 }

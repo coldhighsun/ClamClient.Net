@@ -155,12 +155,12 @@ public sealed class ClamConnectionPoolTests
         var (pool, factory) = BuildPool(maxConnections: 0); // unlimited
         await using (pool)
         {
-            var conns = await Task.WhenAll(
+            var connections = await Task.WhenAll(
                 pool.RentAsync(TestCt),
                 pool.RentAsync(TestCt),
                 pool.RentAsync(TestCt));
 
-            foreach (var c in conns)
+            foreach (var c in connections)
             {
                 pool.Return(c);
             }

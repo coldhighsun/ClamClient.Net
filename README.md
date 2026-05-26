@@ -153,7 +153,7 @@ Dispose `ClamAVClient` (or the DI container) when the application exits — this
 
 | Member | Description |
 |--------|-------------|
-| `Status` | `Clean`, `ThreatFound`, `Error`, or `Unknown` |
+| `Status` | `Clean`, `ThreatFound`, or `Error` |
 | `Threats` | List of `DetectedThreat` (non-empty only when `ThreatFound`) |
 | `RawResponse` | Raw string received from clamd |
 

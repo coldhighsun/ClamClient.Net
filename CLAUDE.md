@@ -33,8 +33,8 @@ For stream scans: `ClamAVClient.ScanStreamAsync` uses `InStreamWriter` to frame 
 - `IClamClient` — public contract; all async methods return `ScanResult` or primitive values
 - `ClamAVClient` — implementation; owns a `ClamConnectionPool` and delegates all sends through it; two `ExecuteCommandAsync` overloads — one for pre-encoded `byte[]` commands, one for dynamic string commands (SCAN, MULTISCAN)
 - `ClamClientOptions` — timeout, chunk size, max stream size, pool settings (`Timeout`, `ChunkSize`, `MaxStreamSize`, `MaxConnections`, `IdleConnectionTimeout`); defaults: endpoint `localhost:3310`, chunk size 128 KB, max stream size 25 MB, timeout 10 s, max connections 10, idle timeout 30 s; `MaxConnections = 0` disables the semaphore cap (unlimited connections)
-- `ClamEndpoint` — discriminated union of TCP (`Host`/`Port`) or Unix domain socket (`SocketPath`)
-- `ScanResult` — contains `ScanStatus` enum and `IReadOnlyList<DetectedThreat>`; status priority is `ThreatFound > Error > Clean > Unknown`
+- `ClamEndpoint` — discriminated union of TCP (`Host`/`Port`) or Unix domain socket (`UnixSocketPath`)
+- `ScanResult` — contains `ScanStatus` enum and `IReadOnlyList<DetectedThreat>`; status values are `Clean`, `ThreatFound`, `Error`; priority when aggregating multi-line results is `ThreatFound > Error > Clean`
 - `DetectedThreat` — `sealed record` with positional parameters `(FileName, ThreatName)`; value equality is intentional and relied on by tests
 - `ClamResponseParser` — parses single-line (`OK`/`FOUND`/`ERROR`) and multi-line (`MULTISCAN`) responses; internal, exposed via `InternalsVisibleTo`
 - `ClamConnectionPool` (`Pool/`) — manages idle `ClamConnection`s; `SemaphoreSlim` caps concurrent connections; `ConcurrentQueue<ClamConnection>` holds idle ones; semaphore slot stays occupied while a connection is idle and is only released on eviction or unhealthy return; internal
