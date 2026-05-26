@@ -1,3 +1,4 @@
+using ClamClient.Net.Exceptions;
 using ClamClient.Net.Protocol;
 using ClamClient.Net.Results;
 
@@ -34,11 +35,9 @@ public sealed class ClamResponseParserTests
     }
 
     [Fact]
-    public void ParseScanResponse_EmptyResponse_ReturnsUnknown()
+    public void ParseScanResponse_EmptyResponse_ThrowsClamProtocolException()
     {
-        var result = ClamResponseParser.ParseScanResponse("");
-
-        Assert.Equal(ScanStatus.Unknown, result.Status);
+        Assert.Throws<ClamProtocolException>(() => ClamResponseParser.ParseScanResponse(""));
     }
 
     [Fact]

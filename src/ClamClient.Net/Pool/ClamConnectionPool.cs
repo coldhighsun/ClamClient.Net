@@ -110,26 +110,28 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
             await candidate.DisposeAsync().ConfigureAwait(false);
         }
 
+        var success = false;
         try
         {
             var stream = await _streamFactory(ct).ConfigureAwait(false);
             await SendIdSessionAsync(stream, ct).ConfigureAwait(false);
+            success = true;
             return new(stream);
         }
         catch (SocketException ex)
         {
-            _semaphore?.Release();
             throw new ClamConnectionException($"Failed to connect to clamd at {_options.Endpoint}.", ex);
         }
         catch (IOException ex)
         {
-            _semaphore?.Release();
             throw new ClamConnectionException($"Failed to connect to clamd at {_options.Endpoint}.", ex);
         }
-        catch
+        finally
         {
-            _semaphore?.Release();
-            throw;
+            if (!success)
+            {
+                _semaphore?.Release();
+            }
         }
     }
 

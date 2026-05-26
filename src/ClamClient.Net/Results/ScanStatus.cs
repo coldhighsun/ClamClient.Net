@@ -18,10 +18,5 @@ public enum ScanStatus
     /// <summary>
     /// clamd reported an error during scanning.
     /// </summary>
-    Error,
-
-    /// <summary>
-    /// The response could not be parsed.
-    /// </summary>
-    Unknown
+    Error
 }
