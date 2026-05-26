@@ -153,9 +153,11 @@ Dispose `ClamAVClient` (or the DI container) when the application exits — this
 
 | Member | Description |
 |--------|-------------|
-| `Status` | `Clean`, `ThreatFound`, or `Error` |
+| `Status` | `Clean`, `ThreatFound`, `Error`, or `StreamTooLarge` |
 | `Threats` | List of `DetectedThreat` (non-empty only when `ThreatFound`) |
 | `RawResponse` | Raw string received from clamd |
+
+`StreamTooLarge` is returned by `ScanStreamAsync` when the stream exceeds `MaxStreamSize`. No data is sent to clamd in this case.
 
 ### Exceptions
 
@@ -163,7 +165,6 @@ Dispose `ClamAVClient` (or the DI container) when the application exits — this
 |------|-------------|
 | `ClamConnectionException` | Connection cannot be established or is lost |
 | `ClamProtocolException` | clamd returns an unexpected or unparseable response |
-| `ClamStreamSizeExceededException` | Input stream exceeds `MaxStreamSize` |
 
 ## License
 
@@ -326,9 +327,11 @@ var options = new ClamClientOptions
 
 | 成员 | 说明 |
 |------|------|
-| `Status` | `Clean`、`ThreatFound`、`Error` 或 `Unknown` |
+| `Status` | `Clean`、`ThreatFound`、`Error` 或 `StreamTooLarge` |
 | `Threats` | `DetectedThreat` 列表（仅 `ThreatFound` 时非空） |
 | `RawResponse` | 从 clamd 收到的原始字符串 |
+
+`StreamTooLarge` 由 `ScanStreamAsync` 在流超过 `MaxStreamSize` 时返回，此时不会向 clamd 发送任何数据。
 
 ### 异常
 
@@ -336,7 +339,6 @@ var options = new ClamClientOptions
 |------|----------|
 | `ClamConnectionException` | 无法建立连接或连接断开 |
 | `ClamProtocolException` | clamd 返回意外或无法解析的响应 |
-| `ClamStreamSizeExceededException` | 输入流超过 `MaxStreamSize` |
 
 ## 许可证
 

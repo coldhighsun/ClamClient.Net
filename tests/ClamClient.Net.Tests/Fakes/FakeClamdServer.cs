@@ -179,6 +179,12 @@ internal sealed class FakeClamdServer : IAsyncDisposable
                         {
                             break;
                         }
+                        catch (EndOfStreamException)
+                        {
+                            // Client closed the connection before sending the terminating zero chunk
+                            // (e.g. stream size exceeded). Treat as a clean disconnect.
+                            break;
+                        }
                     }
 
                     ReceivedBytes = ms.ToArray();

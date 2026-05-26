@@ -96,13 +96,18 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
 
         var startPosition = data.CanSeek ? data.Position : -1L;
 
+        Task WriteData(Stream dest, CancellationToken ct) =>
+            InStreamWriter.WriteAsync(data, dest, _options.ChunkSize, _options.MaxStreamSize, ct);
+
         try
         {
-            var raw = await ExecuteOnceAsync(
-                ClamConnection.InStreamBytes,
-                (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
-                cancellationToken).ConfigureAwait(false);
+            var raw = await ExecuteOnceAsync(ClamConnection.InStreamBytes, WriteData, cancellationToken).ConfigureAwait(false);
             return ClamResponseParser.ParseScanResponse(raw);
+        }
+        catch (ClamStreamSizeExceededException)
+        {
+            // Stream too large — connection is already marked unhealthy by ExecuteOnceAsync's catch block.
+            return ScanResult.CreateStreamTooLarge(_options.MaxStreamSize);
         }
         catch (ClamConnectionException ex) when (startPosition < 0)
         {
@@ -116,11 +121,15 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             // failed connection via _pool.Return, so the retry always opens a brand-new TCP connection
             // and a fresh IDSESSION. ClamAV never sees data from the dead connection.
             data.Position = startPosition;
-            var raw = await ExecuteOnceAsync(
-                ClamConnection.InStreamBytes,
-                (stream, ct) => InStreamWriter.WriteAsync(data, stream, _options.ChunkSize, _options.MaxStreamSize, ct),
-                cancellationToken).ConfigureAwait(false);
-            return ClamResponseParser.ParseScanResponse(raw);
+            try
+            {
+                var raw = await ExecuteOnceAsync(ClamConnection.InStreamBytes, WriteData, cancellationToken).ConfigureAwait(false);
+                return ClamResponseParser.ParseScanResponse(raw);
+            }
+            catch (ClamStreamSizeExceededException)
+            {
+                return ScanResult.CreateStreamTooLarge(_options.MaxStreamSize);
+            }
         }
     }
 

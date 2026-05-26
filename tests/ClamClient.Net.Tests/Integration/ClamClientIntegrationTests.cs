@@ -176,6 +176,24 @@ public sealed class ClamClientIntegrationTests
     }
 
     [Fact]
+    public async Task ScanStreamAsync_StreamExceedsMaxSize_ReturnsStreamTooLargeResult()
+    {
+        await using var server = FakeClamdServer.Start("stream: OK\0");
+        await using var client = new ClamAVClient(new ClamClientOptions
+        {
+            Endpoint = ClamEndpoint.Tcp("127.0.0.1", server.Port),
+            Timeout = TimeSpan.FromSeconds(5),
+            MaxStreamSize = 10
+        });
+        var data = new MemoryStream(new byte[100]);
+
+        var result = await client.ScanStreamAsync(data, TestCt);
+
+        Assert.Equal(ScanStatus.StreamTooLarge, result.Status);
+        Assert.Empty(result.Threats);
+    }
+
+    [Fact]
     public async Task ScanStreamAsync_CleanData_ReturnsCleanResult()
     {
         await using var server = FakeClamdServer.Start("stream: OK\0");

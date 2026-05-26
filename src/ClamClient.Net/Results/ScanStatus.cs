@@ -18,5 +18,11 @@ public enum ScanStatus
     /// <summary>
     /// clamd reported an error during scanning.
     /// </summary>
-    Error
+    Error,
+
+    /// <summary>
+    /// The input stream exceeded the configured <see cref="Configuration.ClamClientOptions.MaxStreamSize"/> limit.
+    /// No data was sent to clamd.
+    /// </summary>
+    StreamTooLarge
 }

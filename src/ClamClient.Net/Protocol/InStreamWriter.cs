@@ -11,6 +11,8 @@ internal static class InStreamWriter
     /// <summary>
     /// Writes <paramref name="source"/> to <paramref name="destination"/> using the INSTREAM framing protocol:
     /// each chunk is prefixed with its 4-byte big-endian length, terminated by a 4-byte zero.
+    /// Throws <see cref="ClamStreamSizeExceededException"/> if the stream exceeds <paramref name="maxStreamSize"/>;
+    /// the caller is responsible for marking the connection unhealthy in that case.
     /// </summary>
     internal static async Task WriteAsync(
         Stream source,

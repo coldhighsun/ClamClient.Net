@@ -1,25 +1,16 @@
 namespace ClamClient.Net.Exceptions;
 
 /// <summary>
-/// Thrown when the input stream exceeds the configured maximum stream size.
+/// Thrown internally when the input stream exceeds the configured maximum stream size.
+/// <see cref="ClamAVClient"/> catches this and returns a <see cref="Results.ScanStatus.StreamTooLarge"/> result
+/// instead of propagating it to the caller.
 /// </summary>
-public sealed class ClamStreamSizeExceededException : Exception
+internal sealed class ClamStreamSizeExceededException : Exception
 {
-    /// <inheritdoc/>
-    public ClamStreamSizeExceededException()
-    {
-    }
-
-    /// <inheritdoc/>
-    public ClamStreamSizeExceededException(string message) : base(message) { }
-
-    /// <inheritdoc/>
-    public ClamStreamSizeExceededException(string message, Exception innerException) : base(message, innerException) { }
-
     /// <summary>
     /// Initializes the exception with the configured maximum size.
     /// </summary>
-    public ClamStreamSizeExceededException(long maxStreamSize)
+    internal ClamStreamSizeExceededException(long maxStreamSize)
         : base($"Stream exceeds the maximum allowed size of {maxStreamSize:N0} bytes.")
     {
         MaxStreamSize = maxStreamSize;
@@ -28,7 +19,7 @@ public sealed class ClamStreamSizeExceededException : Exception
     /// <summary>
     /// The configured maximum stream size in bytes.
     /// </summary>
-    public long MaxStreamSize
+    internal long MaxStreamSize
     {
         get;
     }

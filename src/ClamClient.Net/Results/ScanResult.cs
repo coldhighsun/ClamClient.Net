@@ -47,4 +47,12 @@ public sealed class ScanResult
     /// </summary>
     public override string ToString() =>
         $"{Status}: {(Threats.Count > 0 ? string.Join(", ", Threats.Select(t => t.ThreatName)) : RawResponse)}";
+
+    /// <summary>
+    /// Creates a <see cref="ScanResult"/> representing a stream that exceeded the configured size limit.
+    /// </summary>
+    /// <param name="maxStreamSize">The configured maximum stream size in bytes.</param>
+    /// <returns>A <see cref="ScanResult"/> with <see cref="ScanStatus.StreamTooLarge"/>.</returns>
+    internal static ScanResult CreateStreamTooLarge(long maxStreamSize) =>
+        new(ScanStatus.StreamTooLarge, $"Stream exceeds the maximum allowed size of {maxStreamSize:N0} bytes.");
 }

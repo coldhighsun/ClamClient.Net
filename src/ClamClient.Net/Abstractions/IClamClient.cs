@@ -50,9 +50,9 @@ public interface IClamClient
 
     /// <summary>
     /// Streams arbitrary data to clamd via INSTREAM for scanning.
+    /// Returns <see cref="Results.ScanStatus.StreamTooLarge"/> when the stream exceeds the configured <c>MaxStreamSize</c> limit.
     /// </summary>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="data"/> is <see langword="null"/>.</exception>
-    /// <exception cref="Exceptions.ClamStreamSizeExceededException">Thrown when the stream exceeds the configured <c>MaxStreamSize</c> limit before the data is fully sent.</exception>
     /// <exception cref="Exceptions.ClamConnectionException">Thrown when the connection to clamd is lost and cannot be recovered. Non-seekable streams are not retried on a stale connection.</exception>
     /// <exception cref="Exceptions.ClamProtocolException">Thrown when clamd returns an empty or unparseable response.</exception>
     Task<ScanResult> ScanStreamAsync(Stream data, CancellationToken cancellationToken = default);
