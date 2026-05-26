@@ -1,3 +1,4 @@
+using ClamClient.Net.Exceptions;
 using ClamClient.Net.Results;
 
 namespace ClamClient.Net.Protocol;
@@ -30,7 +31,7 @@ internal static class ClamResponseParser
 
         if (lines.Length == 0)
         {
-            return new(ScanStatus.Unknown, raw);
+            throw new ClamProtocolException(raw, isRawResponse: true);
         }
 
         var threats = new List<DetectedThreat>();
