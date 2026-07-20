@@ -30,7 +30,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     public ClamAVClient(ClamClientOptions options)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _pool = new ClamConnectionPool(options, ConnectAsync);
+        _pool = new(options, ConnectAsync);
     }
 
     /// <summary>
