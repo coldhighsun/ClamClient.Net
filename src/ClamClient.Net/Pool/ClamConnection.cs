@@ -251,7 +251,7 @@ internal sealed class ClamConnection : IAsyncDisposable
             if (available == 0)
             {
                 // Buffer full — spill everything accumulated so far into the overflow stream.
-                overflow ??= new MemoryStream(_readBuffer.Length * 2);
+                overflow ??= new(_readBuffer.Length * 2);
                 overflow.Write(_readBuffer, 0, pos);
                 pos = 0;
                 available = _readBuffer.Length;
