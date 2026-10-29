@@ -12,6 +12,7 @@
     <File Path="Directory.Packages.props" />
     <File Path="nuget.config" />
     <File Path="README.md" />
+    <File Path="README.zh-CN.md" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/QuickStart/QuickStart.csproj" />
