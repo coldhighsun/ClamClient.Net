@@ -8,14 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Build the solution
 dotnet build
 
-# Run all tests
+# Run all tests (xUnit v3 on Microsoft Testing Platform, enabled via global.json)
 dotnet test
 
+# Run tests with cobertura coverage (output in ./coverage, merged report in ./coverage/merged)
+dotnet test --coverage --coverage-output-format cobertura --results-directory ./coverage
+
 # Run a single test class
-dotnet test --filter "FullyQualifiedName~ClamClientIntegrationTests"
+dotnet test --filter-class "*ClamClientIntegrationTests"
 
 # Run a single test method
-dotnet test --filter "FullyQualifiedName~ScanStreamAsync_WhenInfected_ReturnsThreatFound"
+dotnet test --filter-method "*ScanStreamAsync_StreamExceedsMaxSize_ReturnsStreamTooLargeResult"
 ```
 
 ## Architecture
@@ -69,6 +72,8 @@ services.AddClamClient(options => { options.Endpoint = ClamEndpoint.Tcp("localho
 - Versioning is handled by MinVer — git tags of the form `v1.2.3` drive the NuGet package version. Do not manually edit version properties.
 
 ## Testing Approach
+
+The README test-count badge (`tests-N passed`) is hard-coded in all three READMEs (`README.md`, `README.zh-CN.md`, `README.zh-TW.md`). N is the per-target-framework count from the `dotnet test` summary. Update it whenever the number of tests changes.
 
 Tests do **not** require a live clamd process. `FakeClamdServer` (`tests/Fakes/`) is an in-process TCP listener that accepts scripted byte sequences and responses; integration tests use it exclusively. Unit tests cover the parser and stream-writer directly via `InternalsVisibleTo`.
 

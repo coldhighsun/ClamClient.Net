@@ -477,3 +477,6 @@ $RECYCLE.BIN/
 *.swp
 
 .claude
+
+# Test coverage output
+/coverage/
