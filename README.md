@@ -1,13 +1,26 @@
+<div align="center">
+
 # ClamClient.Net
-
-**English** | [简体中文](https://github.com/coldhighsun/ClamClient.Net/blob/main/README.zh-CN.md)
-
-Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with TCP and Unix socket support, and built-in connection pooling.
 
 [![CI](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml/badge.svg)](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml)
 [![NuGet](https://img.shields.io/nuget/v/ClamClient.Net.svg)](https://www.nuget.org/packages/ClamClient.Net)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/ClamClient.Net.svg)](https://www.nuget.org/packages/ClamClient.Net)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Latest Release](https://img.shields.io/github/v/release/coldhighsun/ClamClient.Net?sort=semver)](https://github.com/coldhighsun/ClamClient.Net/releases/latest)
+[![Latest Pre-release](https://img.shields.io/github/v/release/coldhighsun/ClamClient.Net?include_prereleases&sort=semver&label=pre-release)](https://github.com/coldhighsun/ClamClient.Net/releases)
+[![Open Issues](https://img.shields.io/github/issues/coldhighsun/ClamClient.Net)](https://github.com/coldhighsun/ClamClient.Net/issues)
+[![Open PRs](https://img.shields.io/github/issues-pr/coldhighsun/ClamClient.Net)](https://github.com/coldhighsun/ClamClient.Net/pulls)
+[![Last Commit](https://img.shields.io/github/last-commit/coldhighsun/ClamClient.Net)](https://github.com/coldhighsun/ClamClient.Net/commits/main)
+[![GitHub Stars](https://img.shields.io/github/stars/coldhighsun/ClamClient.Net?style=flat)](https://github.com/coldhighsun/ClamClient.Net/stargazers)
+[![License: MIT](https://img.shields.io/github/license/coldhighsun/ClamClient.Net)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8%20%7C%2010-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download)
+
+English | [简体中文](https://github.com/coldhighsun/ClamClient.Net/blob/main/README.zh-CN.md) | [繁體中文](https://github.com/coldhighsun/ClamClient.Net/blob/main/README.zh-TW.md)
+
+</div>
+
+---
+
+Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with TCP and Unix socket support, and built-in connection pooling.
 
 ## Features
 
