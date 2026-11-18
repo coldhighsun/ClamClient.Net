@@ -39,7 +39,52 @@ public sealed class ClamConnectionPoolTests
         var (pool, _) = BuildPool();
         await pool.DisposeAsync();
 
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => pool.RentAsync(TestCt));
+        var ex = await Assert.ThrowsAsync<ObjectDisposedException>(() => pool.RentAsync(TestCt));
+
+        Assert.Equal(typeof(ClamConnectionPool).FullName, ex.ObjectName);
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="ClamConnectionPool.DisposeQuietlyAsync"/> swallows any exception thrown while disposing, not just I/O failures.
+    /// </summary>
+    [Fact]
+    public async Task DisposeQuietlyAsync_WhenDisposeThrowsNonIoException_DoesNotThrow()
+    {
+        var (pool, _) = BuildPool(
+            streamFactory: _ => Task.FromResult<Stream>(new TrackingStream { ThrowOnDispose = true }));
+        await using (pool)
+        {
+            var conn = await pool.RentAsync(TestCt);
+
+            var exception = await Record.ExceptionAsync(() => ClamConnectionPool.DisposeQuietlyAsync(conn));
+
+            Assert.Null(exception);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that a failing connection dispose neither throws from <see cref="ClamConnectionPool.Return"/> nor leaks the capacity slot.
+    /// </summary>
+    [Fact]
+    public async Task Return_WhenDisposeThrows_ReleasesSlotAndDoesNotThrow()
+    {
+        var (pool, _) = BuildPool(
+            maxConnections: 1,
+            streamFactory: _ => Task.FromResult<Stream>(new TrackingStream { ThrowOnDispose = true }));
+        await using (pool)
+        {
+            var conn = await pool.RentAsync(TestCt);
+            conn.Invalidate();
+
+            pool.Return(conn);
+
+            // Without the slot release this would block until the token expires.
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestCt);
+            cts.CancelAfter(TimeSpan.FromSeconds(2));
+            var conn2 = await pool.RentAsync(cts.Token);
+
+            Assert.NotSame(conn, conn2);
+        }
     }
 
     /// <summary>
@@ -262,7 +307,29 @@ public sealed class ClamConnectionPoolTests
     /// </summary>
     private sealed class TrackingStream : Stream
     {
+        /// <summary>
+        /// Backing buffer that records every written byte.
+        /// </summary>
         private readonly MemoryStream _ms = new();
+
+        /// <summary>
+        /// When <see langword="true"/>, <see cref="DisposeAsync"/> throws to simulate a broken connection.
+        /// </summary>
+        public bool ThrowOnDispose { get; init; }
+
+        /// <summary>
+        /// Disposes the stream, or throws when <see cref="ThrowOnDispose"/> is set.
+        /// </summary>
+        /// <returns>A completed task.</returns>
+        public override ValueTask DisposeAsync()
+        {
+            if (ThrowOnDispose)
+            {
+                throw new InvalidOperationException("Simulated dispose failure.");
+            }
+
+            return base.DisposeAsync();
+        }
 
         public override bool CanRead => true;
 
@@ -301,6 +368,18 @@ public sealed class ClamConnectionPoolTests
         {
             _ms.Write(buffer, offset, count);
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Appends the buffer to the in-memory sink.
+        /// </summary>
+        /// <param name="buffer">The bytes to write.</param>
+        /// <param name="ct">A token to cancel the operation.</param>
+        /// <returns>A completed task.</returns>
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+        {
+            _ms.Write(buffer.Span);
+            return ValueTask.CompletedTask;
         }
     }
 }

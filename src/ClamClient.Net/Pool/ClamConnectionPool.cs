@@ -87,10 +87,7 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
     /// </summary>
     internal async Task<ClamConnection> RentAsync(CancellationToken ct)
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(ClamConnectionPool));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
         // Acquire a capacity slot first; this unblocks whenever Return releases one.
         if (_semaphore is not null)
@@ -150,7 +147,8 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
         }
         else
         {
-            _ = connection.DisposeAsync();
+            // Fire-and-forget so a slow or hung peer never blocks the caller or delays slot release.
+            _ = DisposeQuietlyAsync(connection);
         }
 
         // Always release the slot so waiters in RentAsync can proceed.
@@ -168,11 +166,28 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
     }
 
     /// <summary>
+    /// Disposes a connection on a best-effort basis, swallowing any failure because the connection is being discarded anyway.
+    /// </summary>
+    /// <param name="connection">The connection to dispose.</param>
+    /// <returns>A task that completes once the connection has been disposed.</returns>
+    internal static async Task DisposeQuietlyAsync(ClamConnection connection)
+    {
+        try
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Best-effort cleanup: the connection is already being discarded, so a failed dispose is not actionable and must not surface as an unobserved task exception.
+        }
+    }
+
+    /// <summary>
     /// Sends the IDSESSION handshake that enables multi-command mode on the connection.
     /// </summary>
     private static async Task SendIdSessionAsync(Stream stream, CancellationToken ct)
     {
-        await stream.WriteAsync(IdSessionBytes, 0, IdSessionBytes.Length, ct).ConfigureAwait(false);
+        await stream.WriteAsync(IdSessionBytes, ct).ConfigureAwait(false);
         await stream.FlushAsync(ct).ConfigureAwait(false);
     }
 }
