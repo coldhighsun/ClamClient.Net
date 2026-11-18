@@ -28,7 +28,7 @@ var options = new ClamClientOptions
     MaxStreamSize = 50L * 1024 * 1024,   // 50 MB
 };
 
-IClamClient client = new ClamAVClient(options);
+await using var client = new ClamAVClient(options);
 
 // Ping
 var alive = await client.PingAsync();
