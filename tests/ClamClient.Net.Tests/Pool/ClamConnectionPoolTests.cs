@@ -1,5 +1,7 @@
 using ClamClient.Net.Configuration;
+using ClamClient.Net.Exceptions;
 using ClamClient.Net.Pool;
+using System.Net.Sockets;
 
 namespace ClamClient.Net.Tests.Pool;
 
@@ -186,6 +188,20 @@ public sealed class ClamConnectionPoolTests
             var conn2 = await pool.RentAsync(TestCt);
             pool.Return(conn2);
         }
+    }
+
+    /// <summary>
+    /// Verifies that a timed-out connect is reported as <see cref="ClamConnectionTimeoutException"/> and releases the semaphore slot.
+    /// </summary>
+    [Fact]
+    public async Task RentAsync_FactoryThrowsTimedOut_ThrowsConnectionTimeoutException()
+    {
+        var (pool, _) = BuildPool(
+            maxConnections: 1,
+            streamFactory: _ => throw new SocketException((int)SocketError.TimedOut));
+
+        await Assert.ThrowsAsync<ClamConnectionTimeoutException>(() => pool.RentAsync(TestCt));
+        await Assert.ThrowsAsync<ClamConnectionTimeoutException>(() => pool.RentAsync(TestCt));
     }
 
     /// <summary>

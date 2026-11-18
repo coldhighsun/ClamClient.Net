@@ -3,7 +3,7 @@ namespace ClamClient.Net.Exceptions;
 /// <summary>
 /// Thrown when a connection to clamd cannot be established or is lost.
 /// </summary>
-public sealed class ClamConnectionException : Exception
+public class ClamConnectionException : Exception
 {
     /// <inheritdoc/>
     public ClamConnectionException()

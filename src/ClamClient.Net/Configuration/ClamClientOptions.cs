@@ -32,7 +32,7 @@ public sealed class ClamClientOptions
     public long MaxStreamSize { get; set; } = 25L * 1024 * 1024;
 
     /// <summary>
-    /// Socket connect and read timeout. Defaults to 10 seconds.
+    /// Socket connect and read timeout. Must be positive and at most <see cref="int.MaxValue"/> milliseconds; read once when the client is created. Defaults to 10 seconds.
     /// </summary>
     public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(10);
 }

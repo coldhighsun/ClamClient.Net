@@ -322,6 +322,100 @@ public sealed class ClamClientIntegrationTests
     }
 
     /// <summary>
+    /// Verifies that a connect which never completes fails with <see cref="SocketError.TimedOut"/> once the timeout elapses.
+    /// </summary>
+    [Fact]
+    public async Task ConnectWithTimeoutAsync_ConnectNeverCompletes_ThrowsTimedOutSocketException()
+    {
+        var ex = await Assert.ThrowsAsync<SocketException>(() =>
+            ClamAVClient.ConnectWithTimeoutAsync(
+                ct => new ValueTask(Task.Delay(Timeout.Infinite, ct)),
+                TimeSpan.FromMilliseconds(50),
+                TestCt));
+
+        Assert.Equal(SocketError.TimedOut, ex.SocketErrorCode);
+    }
+
+    /// <summary>
+    /// Verifies that cancellation by the caller is not reported as a timeout.
+    /// </summary>
+    [Fact]
+    public async Task ConnectWithTimeoutAsync_CallerCancels_ThrowsOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ClamAVClient.ConnectWithTimeoutAsync(
+                ct => new ValueTask(Task.Delay(Timeout.Infinite, ct)),
+                TimeSpan.FromSeconds(30),
+                cts.Token));
+    }
+
+    /// <summary>
+    /// Verifies that a connect which completes in time succeeds.
+    /// </summary>
+    [Fact]
+    public async Task ConnectWithTimeoutAsync_ConnectCompletes_Succeeds()
+    {
+        await ClamAVClient.ConnectWithTimeoutAsync(_ => ValueTask.CompletedTask, TimeSpan.FromSeconds(30), TestCt);
+    }
+
+    /// <summary>
+    /// Verifies that a connect timeout surfaces as <see cref="ClamConnectionTimeoutException"/> and the connect is attempted only once.
+    /// </summary>
+    [Fact]
+    public async Task PingAsync_ConnectTimesOut_ThrowsTimeoutExceptionWithoutRetry()
+    {
+        var attempts = 0;
+        await using var client = new ClamAVClient(
+            new() { Timeout = TimeSpan.FromSeconds(5) },
+            _ =>
+            {
+                Interlocked.Increment(ref attempts);
+                throw new SocketException((int)SocketError.TimedOut);
+            });
+
+        await Assert.ThrowsAsync<ClamConnectionTimeoutException>(() => client.PingAsync(TestCt));
+
+        Assert.Equal(1, attempts);
+    }
+
+    /// <summary>
+    /// Verifies that a non-positive timeout is rejected when the client is constructed.
+    /// </summary>
+    /// <param name="milliseconds">The invalid timeout in milliseconds.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Constructor_NonPositiveTimeout_ThrowsArgumentOutOfRangeException(int milliseconds)
+    {
+        var options = new ClamClientOptions { Timeout = TimeSpan.FromMilliseconds(milliseconds) };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ClamAVClient(options));
+    }
+
+    /// <summary>
+    /// Verifies that changing <see cref="ClamClientOptions.Timeout"/> after construction does not affect the validated value in use.
+    /// </summary>
+    [Fact]
+    public async Task PingAsync_TimeoutChangedAfterConstruction_UsesValidatedTimeout()
+    {
+        await using var server = FakeClamdServer.Start("PONG\0");
+        var options = new ClamClientOptions
+        {
+            Endpoint = ClamEndpoint.Tcp("127.0.0.1", server.Port),
+            Timeout = TimeSpan.FromSeconds(5)
+        };
+        await using var client = new ClamAVClient(options);
+        options.Timeout = TimeSpan.Zero;
+
+        var result = await client.PingAsync(TestCt);
+
+        Assert.True(result);
+    }
+
+    /// <summary>
     /// Reserves a loopback port by binding and immediately releasing it, so that nothing is listening on it.
     /// </summary>
     /// <returns>A TCP port number on the loopback interface that has no listener.</returns>
