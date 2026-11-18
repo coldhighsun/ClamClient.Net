@@ -107,13 +107,7 @@ internal sealed class ClamConnection : IAsyncDisposable
     {
         try
         {
-            await _stream.WriteAsync(commandBytes, ct).ConfigureAwait(false);
-            await _stream.FlushAsync(ct).ConfigureAwait(false);
-
-            if (afterCommand is not null)
-            {
-                await afterCommand(_stream, ct).ConfigureAwait(false);
-            }
+            await SendRequestAsync(commandBytes, afterCommand, ct).ConfigureAwait(false);
 
             var response = await ReadNullTerminatedAsync(ct).ConfigureAwait(false);
             LastUsedAt = DateTime.UtcNow;
@@ -124,6 +118,33 @@ internal sealed class ClamConnection : IAsyncDisposable
             _isHealthy = false;
             throw;
         }
+    }
+
+    /// <summary>
+    /// Writes the command and, if supplied, the follow-up payload. When there is a payload, everything is coalesced
+    /// into as few socket writes as possible, because clamd stalls on reused connections when a request is split
+    /// across several small TCP segments.
+    /// </summary>
+    /// <param name="commandBytes">The pre-encoded wire bytes for the command.</param>
+    /// <param name="afterCommand">Optional delegate that writes the payload after the command.</param>
+    /// <param name="ct">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that completes once the whole request has been written and flushed.</returns>
+    private async Task SendRequestAsync(
+        byte[] commandBytes,
+        Func<Stream, CancellationToken, Task>? afterCommand,
+        CancellationToken ct)
+    {
+        if (afterCommand is null)
+        {
+            await _stream.WriteAsync(commandBytes, ct).ConfigureAwait(false);
+            await _stream.FlushAsync(ct).ConfigureAwait(false);
+            return;
+        }
+
+        using var body = new CoalescingWriteStream(_stream);
+        await body.WriteAsync(commandBytes, ct).ConfigureAwait(false);
+        await afterCommand(body, ct).ConfigureAwait(false);
+        await body.FlushAsync(ct).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -139,13 +160,7 @@ internal sealed class ClamConnection : IAsyncDisposable
         {
             // z + command + \0 — dynamic path commands, called infrequently relative to INSTREAM.
             var commandBytes = Encoding.ASCII.GetBytes($"z{command}\0");
-            await _stream.WriteAsync(commandBytes, ct).ConfigureAwait(false);
-            await _stream.FlushAsync(ct).ConfigureAwait(false);
-
-            if (afterCommand is not null)
-            {
-                await afterCommand(_stream, ct).ConfigureAwait(false);
-            }
+            await SendRequestAsync(commandBytes, afterCommand, ct).ConfigureAwait(false);
 
             var response = await ReadNullTerminatedAsync(ct).ConfigureAwait(false);
             LastUsedAt = DateTime.UtcNow;

@@ -322,6 +322,21 @@ public sealed class ClamClientIntegrationTests
     }
 
     /// <summary>
+    /// Verifies that Nagle's algorithm is disabled on TCP connections so small writes are sent immediately.
+    /// </summary>
+    [Fact]
+    public async Task ConnectTcpAsync_Success_EnablesNoDelay()
+    {
+        await using var server = FakeClamdServer.Start();
+        var client = new TcpClient();
+
+        await using var stream = await ClamAVClient.ConnectTcpAsync(
+            client, "127.0.0.1", server.Port, TimeSpan.FromSeconds(5), TestCt);
+
+        Assert.True(client.NoDelay);
+    }
+
+    /// <summary>
     /// Verifies that a connect which never completes fails with <see cref="SocketError.TimedOut"/> once the timeout elapses.
     /// </summary>
     [Fact]
@@ -394,6 +409,26 @@ public sealed class ClamClientIntegrationTests
         var options = new ClamClientOptions { Timeout = TimeSpan.FromMilliseconds(milliseconds) };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new ClamAVClient(options));
+    }
+
+    /// <summary>
+    /// Verifies that a stream rejected as too large before the buffered request is flushed sends no command to clamd.
+    /// </summary>
+    [Fact]
+    public async Task ScanStreamAsync_TooLargeWithinBuffer_SendsNothingToClamd()
+    {
+        await using var server = FakeClamdServer.Start("stream: OK\0");
+        await using var client = new ClamAVClient(new()
+        {
+            Endpoint = ClamEndpoint.Tcp("127.0.0.1", server.Port),
+            Timeout = TimeSpan.FromSeconds(5),
+            MaxStreamSize = 10
+        });
+
+        var result = await client.ScanStreamAsync(new MemoryStream(new byte[100]), TestCt);
+
+        Assert.Equal(ScanStatus.StreamTooLarge, result.Status);
+        Assert.Empty(server.ReceivedBytes);
     }
 
     /// <summary>
