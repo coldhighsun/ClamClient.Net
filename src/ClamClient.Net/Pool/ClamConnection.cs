@@ -84,7 +84,7 @@ internal sealed class ClamConnection : IAsyncDisposable
         {
             try
             {
-                await _stream.WriteAsync(EndBytes, 0, EndBytes.Length).ConfigureAwait(false);
+                await _stream.WriteAsync(EndBytes).ConfigureAwait(false);
                 await _stream.FlushAsync().ConfigureAwait(false);
             }
             catch
@@ -107,7 +107,7 @@ internal sealed class ClamConnection : IAsyncDisposable
     {
         try
         {
-            await _stream.WriteAsync(commandBytes, 0, commandBytes.Length, ct).ConfigureAwait(false);
+            await _stream.WriteAsync(commandBytes, ct).ConfigureAwait(false);
             await _stream.FlushAsync(ct).ConfigureAwait(false);
 
             if (afterCommand is not null)
@@ -139,7 +139,7 @@ internal sealed class ClamConnection : IAsyncDisposable
         {
             // z + command + \0 — dynamic path commands, called infrequently relative to INSTREAM.
             var commandBytes = Encoding.ASCII.GetBytes($"z{command}\0");
-            await _stream.WriteAsync(commandBytes, 0, commandBytes.Length, ct).ConfigureAwait(false);
+            await _stream.WriteAsync(commandBytes, ct).ConfigureAwait(false);
             await _stream.FlushAsync(ct).ConfigureAwait(false);
 
             if (afterCommand is not null)
@@ -190,13 +190,13 @@ internal sealed class ClamConnection : IAsyncDisposable
             string line;
             if (newlineIdx < 0)
             {
-                line = StripOneLine(response.Substring(start));
+                line = StripOneLine(response[start..]);
                 sb.Append(line);
                 break;
             }
 
             var end = newlineIdx;
-            line = StripOneLine(response.Substring(start, end - start));
+            line = StripOneLine(response[start..end]);
             sb.Append(line);
             sb.Append('\n');
             start = end + 1;
@@ -227,7 +227,7 @@ internal sealed class ClamConnection : IAsyncDisposable
             }
         }
 
-        return line.Substring(colonIdx + 2);
+        return line[(colonIdx + 2)..];
     }
 
     /// <summary>
@@ -253,7 +253,7 @@ internal sealed class ClamConnection : IAsyncDisposable
                 available = _readBuffer.Length;
             }
 
-            var read = await _stream.ReadAsync(_readBuffer, pos, available, ct).ConfigureAwait(false);
+            var read = await _stream.ReadAsync(_readBuffer.AsMemory(pos, available), ct).ConfigureAwait(false);
             if (read == 0)
             {
                 break; // connection closed
