@@ -32,7 +32,7 @@ For stream scans: `ClamAVClient.ScanStreamAsync` uses `InStreamWriter` to frame 
 **Key types:**
 - `IClamClient` — public contract; all async methods return `ScanResult` or primitive values; methods: `PingAsync` (→ `bool`), `GetVersionAsync` (→ `string`), `GetStatsAsync` (→ `string`), `ScanFileAsync`, `MultiScanAsync`, `ScanStreamAsync` (→ `ScanResult`), `ReloadAsync`, `ShutdownAsync`
 - `ClamAVClient` — implementation; owns a `ClamConnectionPool` and delegates all sends through it; two `ExecuteCommandAsync` overloads — one for pre-encoded `byte[]` commands, one for dynamic string commands (SCAN, MULTISCAN)
-- `ClamClientOptions` — timeout, chunk size, max stream size, pool settings (`Timeout`, `ChunkSize`, `MaxStreamSize`, `MaxConnections`, `IdleConnectionTimeout`); defaults: endpoint `localhost:3310`, chunk size 128 KB, max stream size 25 MB, timeout 10 s, max connections 10, idle timeout 30 s; `MaxConnections = 0` disables the semaphore cap (unlimited connections)
+- `ClamClientOptions` — timeout, chunk size, max stream size, pool settings (`Timeout` — must be positive, validated and snapshotted by the `ClamAVClient` constructor, `ChunkSize`, `MaxStreamSize`, `MaxConnections`, `IdleConnectionTimeout`); defaults: endpoint `localhost:3310`, chunk size 128 KB, max stream size 25 MB, timeout 10 s, max connections 10, idle timeout 30 s; `MaxConnections = 0` disables the semaphore cap (unlimited connections)
 - `ClamEndpoint` — discriminated union of TCP (`Host`/`Port`) or Unix domain socket (`UnixSocketPath`)
 - `ScanResult` — contains `ScanStatus` enum, `IReadOnlyList<DetectedThreat>`, and `RawResponse` (raw string from clamd); status values are `Clean`, `ThreatFound`, `Error`, `StreamTooLarge`; priority when aggregating multi-line results is `ThreatFound > Error > Clean`; `StreamTooLarge` is returned by `ScanStreamAsync` when the stream exceeds `MaxStreamSize` (no data sent to clamd); constructed via internal factory `ScanResult.CreateStreamTooLarge(maxStreamSize)`
 - `DetectedThreat` — `sealed record` with positional parameters `(FileName, ThreatName)`; value equality is intentional and relied on by tests
@@ -44,6 +44,7 @@ For stream scans: `ClamAVClient.ScanStreamAsync` uses `InStreamWriter` to frame 
 
 **Exceptions thrown by `ClamAVClient`:**
 - `ClamConnectionException` — connection to clamd failed or was lost
+- `ClamConnectionTimeoutException` (subclass of `ClamConnectionException`) — connecting exceeded `ClamClientOptions.Timeout`; never retried by the stale-connection retry
 - `ClamProtocolException` — unexpected/malformed response from clamd
 
 Stream size exceeded is **not** an exception — `ScanStreamAsync` returns `ScanStatus.StreamTooLarge` instead. `ClamStreamSizeExceededException` is `internal` and only used as a control-flow signal between `InStreamWriter` and `ClamAVClient`.

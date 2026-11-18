@@ -20,6 +20,11 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     private readonly ClamClientOptions _options;
 
     /// <summary>
+    /// The validated connect/read/write timeout, snapshotted at construction so later changes to the mutable options cannot bypass validation.
+    /// </summary>
+    private readonly TimeSpan _timeout;
+
+    /// <summary>
     /// Manages a pool of connections to the clamd server for efficient reuse across multiple operations.
     /// </summary>
     private readonly ClamConnectionPool _pool;
@@ -27,10 +32,31 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     /// <summary>
     /// Initializes a new instance with the supplied options.
     /// </summary>
+    /// <param name="options">The client options.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="ClamClientOptions.Timeout"/> is not positive or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
     public ClamAVClient(ClamClientOptions options)
+        : this(options, streamFactory: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance with the supplied options and an optional connection factory, so tests can substitute the transport.
+    /// </summary>
+    /// <param name="options">The client options.</param>
+    /// <param name="streamFactory">Opens a new stream to clamd; when <see langword="null"/>, the endpoint from <paramref name="options"/> is used.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="ClamClientOptions.Timeout"/> is not positive or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
+    internal ClamAVClient(ClamClientOptions options, Func<CancellationToken, Task<Stream>>? streamFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _pool = new(options, ConnectAsync);
+        if (options.Timeout <= TimeSpan.Zero || options.Timeout.TotalMilliseconds > int.MaxValue)
+        {
+            throw new ArgumentOutOfRangeException(
+                "options.Timeout", options.Timeout, "Timeout must be positive and at most int.MaxValue milliseconds.");
+        }
+
+        _timeout = options.Timeout;
+
+        _pool = new(options, streamFactory ?? ConnectAsync);
     }
 
     /// <summary>
@@ -109,6 +135,11 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             // Stream too large — connection is already marked unhealthy by ExecuteOnceAsync's catch block.
             return ScanResult.CreateStreamTooLarge(_options.MaxStreamSize);
         }
+        catch (ClamConnectionTimeoutException)
+        {
+            // Connect timeouts are not stale-connection failures; retrying would only double the wait.
+            throw;
+        }
         catch (ClamConnectionException ex) when (startPosition < 0)
         {
             // Non-seekable stream — cannot retry after a stale connection failure.
@@ -148,7 +179,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     private async Task<Stream> ConnectAsync(CancellationToken cancellationToken)
     {
         var endpoint = _options.Endpoint;
-        var timeoutMs = (int)_options.Timeout.TotalMilliseconds;
+        var timeoutMs = (int)_timeout.TotalMilliseconds;
 
         if (endpoint.IsUnixSocket)
         {
@@ -157,7 +188,8 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             {
                 socket.SendTimeout = timeoutMs;
                 socket.ReceiveTimeout = timeoutMs;
-                await socket.ConnectAsync(new UnixDomainSocketEndPoint(endpoint.UnixSocketPath!), cancellationToken)
+                var unixEndPoint = new UnixDomainSocketEndPoint(endpoint.UnixSocketPath!);
+                await ConnectWithTimeoutAsync(ct => socket.ConnectAsync(unixEndPoint, ct), _timeout, cancellationToken)
                     .ConfigureAwait(false);
                 return new NetworkStream(socket, ownsSocket: true);
             }
@@ -169,7 +201,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             }
         }
 
-        return await ConnectTcpAsync(new TcpClient(), endpoint.Host!, endpoint.Port, _options.Timeout, cancellationToken)
+        return await ConnectTcpAsync(new TcpClient(), endpoint.Host!, endpoint.Port, _timeout, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -180,9 +212,10 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     /// <param name="client">The client to connect. Ownership is taken by this method.</param>
     /// <param name="host">The remote host name or address.</param>
     /// <param name="port">The remote TCP port.</param>
-    /// <param name="timeout">The send/receive timeout applied to the client.</param>
+    /// <param name="timeout">The connect timeout, also applied as the send/receive timeout of the client.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A stream representing the open connection.</returns>
+    /// <exception cref="SocketException">Thrown with <see cref="SocketError.TimedOut"/> when the connect exceeds <paramref name="timeout"/>.</exception>
     internal static async Task<Stream> ConnectTcpAsync(
         TcpClient client,
         string host,
@@ -196,14 +229,44 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             client.SendTimeout = timeoutMs;
             client.ReceiveTimeout = timeoutMs;
 
-            await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
+            await ConnectWithTimeoutAsync(ct => client.ConnectAsync(host, port, ct), timeout, cancellationToken)
+                .ConfigureAwait(false);
             return client.GetStream();
         }
         catch
         {
-            // Connect failed or was cancelled: release the client instead of waiting for the finalizer.
+            // Connect failed, timed out or was cancelled: release the client instead of waiting for the finalizer.
             client.Dispose();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Runs a connect operation under a timeout. Neither <see cref="Socket.SendTimeout"/> nor
+    /// <see cref="Socket.ReceiveTimeout"/> applies to connecting, so the timeout is enforced via cancellation.
+    /// </summary>
+    /// <param name="connect">The connect operation; it must honor the token it is given.</param>
+    /// <param name="timeout">The maximum time the connect may take.</param>
+    /// <param name="cancellationToken">The caller's token; cancelling it propagates <see cref="OperationCanceledException"/>.</param>
+    /// <returns>A task that completes when the connect has finished.</returns>
+    /// <exception cref="SocketException">Thrown with <see cref="SocketError.TimedOut"/> when <paramref name="timeout"/> elapses first.</exception>
+    internal static async Task ConnectWithTimeoutAsync(
+        Func<CancellationToken, ValueTask> connect,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        try
+        {
+            await connect(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Only the timeout fired, not the caller: report it as a connect failure so the pool wraps it
+            // in ClamConnectionException instead of letting it look like a caller-initiated cancellation.
+            throw new SocketException((int)SocketError.TimedOut);
         }
     }
 
@@ -225,7 +288,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
         {
             return await ExecuteOnceAsync(commandBytes, afterCommand, cancellationToken).ConfigureAwait(false);
         }
-        catch (ClamConnectionException) when (afterCommand is null)
+        catch (ClamConnectionException ex) when (afterCommand is null && ex is not ClamConnectionTimeoutException)
         {
             // Stale pooled connection — the failed connection was already evicted; retry with a fresh one.
             return await ExecuteOnceAsync(commandBytes, afterCommand: null, cancellationToken).ConfigureAwait(false);
@@ -250,7 +313,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
         {
             return await ExecuteOnceAsync(command, afterCommand, cancellationToken).ConfigureAwait(false);
         }
-        catch (ClamConnectionException)
+        catch (ClamConnectionException ex) when (ex is not ClamConnectionTimeoutException)
         {
             // Stale pooled connection — retry once with a fresh one.
             return await ExecuteOnceAsync(command, afterCommand, cancellationToken).ConfigureAwait(false);

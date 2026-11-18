@@ -166,6 +166,7 @@ var options = new ClamClientOptions
 | 类型 | 抛出时机 |
 |------|----------|
 | `ClamConnectionException` | 无法建立连接或连接断开 |
+| `ClamConnectionTimeoutException` | 连接 clamd 超过 `Timeout`（`ClamConnectionException` 的子类，不会自动重试） |
 | `ClamProtocolException` | clamd 返回意外或无法解析的响应 |
 
 ## 许可证

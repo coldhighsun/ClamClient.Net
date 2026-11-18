@@ -166,6 +166,7 @@ Dispose `ClamAVClient` (or the DI container) when the application exits — this
 | Type | When thrown |
 |------|-------------|
 | `ClamConnectionException` | Connection cannot be established or is lost |
+| `ClamConnectionTimeoutException` | Connecting to clamd exceeds `Timeout` (subclass of `ClamConnectionException`; not retried automatically) |
 | `ClamProtocolException` | clamd returns an unexpected or unparseable response |
 
 ## License

@@ -118,6 +118,10 @@ internal sealed class ClamConnectionPool : IAsyncDisposable
             success = true;
             return new(stream);
         }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
+        {
+            throw new ClamConnectionTimeoutException($"Timed out connecting to clamd at {_options.Endpoint}.", ex);
+        }
         catch (SocketException ex)
         {
             throw new ClamConnectionException($"Failed to connect to clamd at {_options.Endpoint}.", ex);
