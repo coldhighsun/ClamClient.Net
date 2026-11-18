@@ -1,4 +1,5 @@
 using ClamClient.Net.Exceptions;
+using System.Buffers;
 using System.Buffers.Binary;
 
 namespace ClamClient.Net.Protocol;
@@ -8,6 +9,16 @@ namespace ClamClient.Net.Protocol;
 /// </summary>
 internal static class InStreamWriter
 {
+    /// <summary>
+    /// Size in bytes of the big-endian length prefix that precedes every chunk.
+    /// </summary>
+    private const int LengthPrefixSize = 4;
+
+    /// <summary>
+    /// The zero-length chunk (four zero bytes) that signals the end of the stream to clamd.
+    /// </summary>
+    private static readonly byte[] Terminator = new byte[LengthPrefixSize];
+
     /// <summary>
     /// Writes <paramref name="source"/> to <paramref name="destination"/> using the INSTREAM framing protocol:
     /// each chunk is prefixed with its 4-byte big-endian length, terminated by a 4-byte zero.
@@ -21,27 +32,35 @@ internal static class InStreamWriter
         long maxStreamSize,
         CancellationToken cancellationToken)
     {
-        var buffer = new byte[chunkSize];
-        var lengthBuffer = new byte[4];
-        long totalBytes = 0;
-
-        int bytesRead;
-        while ((bytesRead = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        // Rented rather than allocated: a default-sized chunk buffer (128 KB) would land on the large object heap on every scan.
+        // The first 4 bytes of the buffer hold the chunk length so length prefix and data go out in one write.
+        var buffer = ArrayPool<byte>.Shared.Rent(LengthPrefixSize + chunkSize);
+        try
         {
-            totalBytes += bytesRead;
-            if (totalBytes > maxStreamSize)
+            long totalBytes = 0;
+
+            // The rented array may be larger than requested, so the read is limited to exactly chunkSize bytes.
+            int bytesRead;
+            while ((bytesRead = await source.ReadAsync(buffer.AsMemory(LengthPrefixSize, chunkSize), cancellationToken).ConfigureAwait(false)) > 0)
             {
-                throw new ClamStreamSizeExceededException(maxStreamSize);
+                totalBytes += bytesRead;
+                if (totalBytes > maxStreamSize)
+                {
+                    throw new ClamStreamSizeExceededException(maxStreamSize);
+                }
+
+                BinaryPrimitives.WriteUInt32BigEndian(buffer, (uint)bytesRead);
+                await destination.WriteAsync(buffer.AsMemory(0, LengthPrefixSize + bytesRead), cancellationToken).ConfigureAwait(false);
             }
 
-            BinaryPrimitives.WriteUInt32BigEndian(lengthBuffer, (uint)bytesRead);
-            await destination.WriteAsync(lengthBuffer, cancellationToken).ConfigureAwait(false);
-            await destination.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+            // Zero-length chunk signals end of stream to clamd
+            await destination.WriteAsync(Terminator, cancellationToken).ConfigureAwait(false);
+            await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
-
-        // Zero-length chunk signals end of stream to clamd
-        Array.Clear(lengthBuffer, 0, 4);
-        await destination.WriteAsync(lengthBuffer, cancellationToken).ConfigureAwait(false);
-        await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+        finally
+        {
+            // Cleared because the buffer holds scanned content that must not leak to other users of the shared pool.
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
     }
 }

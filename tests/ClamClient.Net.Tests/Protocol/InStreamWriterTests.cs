@@ -56,6 +56,54 @@ public sealed class InStreamWriterTests
         Assert.Equal(payload, reconstructed.ToArray());
     }
 
+    /// <summary>
+    /// Verifies that the length prefix and the chunk data are written in one call, followed by one call for the terminator.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_SinglePayloadChunk_WritesLengthAndDataInOneCall()
+    {
+        var source = new MemoryStream("Hello, ClamAV!"u8.ToArray());
+        var destination = new WriteCountingStream();
+
+        await InStreamWriter.WriteAsync(source, destination, chunkSize: 1024, maxStreamSize: 1024 * 1024, TestContext.Current.CancellationToken);
+
+        // One write for length prefix + data, one for the terminator.
+        Assert.Equal(2, destination.WriteCount);
+    }
+
+    /// <summary>
+    /// Verifies that each chunk is written with its length prefix in a single call, plus one call for the terminator.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_MultipleChunks_WritesOneCallPerChunkPlusTerminator()
+    {
+        var source = new MemoryStream(new byte[250]);
+        var destination = new WriteCountingStream();
+
+        await InStreamWriter.WriteAsync(source, destination, chunkSize: 100, maxStreamSize: 1024 * 1024, TestContext.Current.CancellationToken);
+
+        // 100 + 100 + 50 bytes = 3 chunk writes, then the terminator.
+        Assert.Equal(4, destination.WriteCount);
+    }
+
+    /// <summary>
+    /// A write-only stream that counts how many write calls it receives.
+    /// </summary>
+    private sealed class WriteCountingStream : MemoryStream
+    {
+        /// <summary>
+        /// Gets the number of write calls received.
+        /// </summary>
+        public int WriteCount { get; private set; }
+
+        /// <inheritdoc/>
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            WriteCount++;
+            return base.WriteAsync(buffer, cancellationToken);
+        }
+    }
+
     [Fact]
     public async Task WriteAsync_SmallPayload_WritesCorrectFraming()
     {

@@ -225,6 +225,11 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
             client.SendTimeout = timeoutMs;
             client.ReceiveTimeout = timeoutMs;
 
+            // Disable Nagle's algorithm so small request writes are never held back waiting for an ACK.
+            // This is not what fixes the ~50 ms stall clamd shows on split INSTREAM requests; that is avoided
+            // by coalescing the request into one write (see CoalescingWriteStream).
+            client.NoDelay = true;
+
             await ConnectWithTimeoutAsync(ct => client.ConnectAsync(host, port, ct), timeout, cancellationToken)
                 .ConfigureAwait(false);
             return client.GetStream();
