@@ -1,6 +1,9 @@
 using ClamClient.Net.Configuration;
+using ClamClient.Net.Exceptions;
 using ClamClient.Net.Results;
 using ClamClient.Net.Tests.Fakes;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
 
 namespace ClamClient.Net.Tests.Integration;
@@ -245,10 +248,119 @@ public sealed class ClamClientIntegrationTests
         Assert.Equal("zSHUTDOWN\0", sentText);
     }
 
+    /// <summary>
+    /// Verifies that a refused connection surfaces as <see cref="ClamConnectionException"/>.
+    /// </summary>
+    [Fact]
+    public async Task PingAsync_NothingListening_ThrowsClamConnectionException()
+    {
+        var port = GetUnusedPort();
+        await using var client = BuildClient(port);
+
+        await Assert.ThrowsAsync<ClamConnectionException>(() => client.PingAsync(TestCt));
+    }
+
+    /// <summary>
+    /// Verifies that an already-cancelled token surfaces as <see cref="OperationCanceledException"/>.
+    /// </summary>
+    [Fact]
+    public async Task PingAsync_CancelledToken_ThrowsOperationCanceledException()
+    {
+        var port = GetUnusedPort();
+        await using var client = BuildClient(port);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.PingAsync(cts.Token));
+    }
+
+    /// <summary>
+    /// Verifies that the <see cref="TcpClient"/> is disposed when the connection attempt fails.
+    /// </summary>
+    [Fact]
+    public async Task ConnectTcpAsync_ConnectionRefused_DisposesClient()
+    {
+        var port = GetUnusedPort();
+        var client = new DisposeTrackingTcpClient();
+
+        await Assert.ThrowsAnyAsync<SocketException>(() =>
+            ClamAVClient.ConnectTcpAsync(client, "127.0.0.1", port, TimeSpan.FromSeconds(5), TestCt));
+
+        Assert.True(client.IsDisposed);
+    }
+
+    /// <summary>
+    /// Verifies that the <see cref="TcpClient"/> is disposed when the connection attempt is cancelled.
+    /// </summary>
+    [Fact]
+    public async Task ConnectTcpAsync_Cancelled_DisposesClient()
+    {
+        var port = GetUnusedPort();
+        var client = new DisposeTrackingTcpClient();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ClamAVClient.ConnectTcpAsync(client, "127.0.0.1", port, TimeSpan.FromSeconds(5), cts.Token));
+
+        Assert.True(client.IsDisposed);
+    }
+
+    /// <summary>
+    /// Verifies that the <see cref="TcpClient"/> is not disposed on success, because the returned stream owns the socket.
+    /// </summary>
+    [Fact]
+    public async Task ConnectTcpAsync_Success_DoesNotDisposeClient()
+    {
+        await using var server = FakeClamdServer.Start();
+        var client = new DisposeTrackingTcpClient();
+
+        await using var stream = await ClamAVClient.ConnectTcpAsync(
+            client, "127.0.0.1", server.Port, TimeSpan.FromSeconds(5), TestCt);
+
+        Assert.False(client.IsDisposed);
+    }
+
+    /// <summary>
+    /// Reserves a loopback port by binding and immediately releasing it, so that nothing is listening on it.
+    /// </summary>
+    /// <returns>A TCP port number on the loopback interface that has no listener.</returns>
+    private static int GetUnusedPort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        try
+        {
+            return ((IPEndPoint)listener.LocalEndpoint).Port;
+        }
+        finally
+        {
+            listener.Stop();
+        }
+    }
+
     private static ClamAVClient BuildClient(int port) =>
         new(new()
         {
             Endpoint = ClamEndpoint.Tcp("127.0.0.1", port),
             Timeout = TimeSpan.FromSeconds(5)
         });
+
+    /// <summary>
+    /// A <see cref="TcpClient"/> that records whether it has been disposed.
+    /// </summary>
+    private sealed class DisposeTrackingTcpClient : TcpClient
+    {
+        /// <summary>
+        /// Gets a value indicating whether <see cref="TcpClient.Dispose(bool)"/> has been called.
+        /// </summary>
+        public bool IsDisposed { get; private set; }
+
+        /// <inheritdoc/>
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
 }

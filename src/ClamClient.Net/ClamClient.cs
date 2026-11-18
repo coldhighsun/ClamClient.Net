@@ -153,19 +153,58 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
         if (endpoint.IsUnixSocket)
         {
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-            socket.SendTimeout = timeoutMs;
-            socket.ReceiveTimeout = timeoutMs;
-            await socket.ConnectAsync(new UnixDomainSocketEndPoint(endpoint.UnixSocketPath!), cancellationToken)
-                .ConfigureAwait(false);
-            return new NetworkStream(socket, ownsSocket: true);
+            try
+            {
+                socket.SendTimeout = timeoutMs;
+                socket.ReceiveTimeout = timeoutMs;
+                await socket.ConnectAsync(new UnixDomainSocketEndPoint(endpoint.UnixSocketPath!), cancellationToken)
+                    .ConfigureAwait(false);
+                return new NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                // Connect failed or was cancelled: the stream never took ownership, so release the socket here.
+                socket.Dispose();
+                throw;
+            }
         }
 
-        var client = new TcpClient();
-        client.SendTimeout = timeoutMs;
-        client.ReceiveTimeout = timeoutMs;
+        return await ConnectTcpAsync(new TcpClient(), endpoint.Host!, endpoint.Port, _options.Timeout, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        await client.ConnectAsync(endpoint.Host!, endpoint.Port, cancellationToken).ConfigureAwait(false);
-        return client.GetStream();
+    /// <summary>
+    /// Connects the supplied <see cref="TcpClient"/> and returns its stream. The client is disposed if
+    /// the connection attempt fails or is cancelled; on success the returned stream owns the socket.
+    /// </summary>
+    /// <param name="client">The client to connect. Ownership is taken by this method.</param>
+    /// <param name="host">The remote host name or address.</param>
+    /// <param name="port">The remote TCP port.</param>
+    /// <param name="timeout">The send/receive timeout applied to the client.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A stream representing the open connection.</returns>
+    internal static async Task<Stream> ConnectTcpAsync(
+        TcpClient client,
+        string host,
+        int port,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var timeoutMs = (int)timeout.TotalMilliseconds;
+            client.SendTimeout = timeoutMs;
+            client.ReceiveTimeout = timeoutMs;
+
+            await client.ConnectAsync(host, port, cancellationToken).ConfigureAwait(false);
+            return client.GetStream();
+        }
+        catch
+        {
+            // Connect failed or was cancelled: release the client instead of waiting for the finalizer.
+            client.Dispose();
+            throw;
+        }
     }
 
     /// <summary>
