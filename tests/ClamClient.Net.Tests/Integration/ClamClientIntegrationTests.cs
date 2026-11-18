@@ -386,13 +386,111 @@ public sealed class ClamClientIntegrationTests
     /// </summary>
     /// <param name="milliseconds">The invalid timeout in milliseconds.</param>
     [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Constructor_NonPositiveTimeout_ThrowsArgumentOutOfRangeException(int milliseconds)
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData(int.MaxValue + 1L)]
+    public void Constructor_InvalidTimeout_ThrowsArgumentOutOfRangeException(long milliseconds)
     {
         var options = new ClamClientOptions { Timeout = TimeSpan.FromMilliseconds(milliseconds) };
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new ClamAVClient(options));
+    }
+
+    /// <summary>
+    /// Verifies that the largest allowed timeout (<see cref="int.MaxValue"/> milliseconds) is accepted.
+    /// </summary>
+    [Fact]
+    public async Task Constructor_TimeoutEqualToIntMaxValueMilliseconds_DoesNotThrow()
+    {
+        var options = new ClamClientOptions { Timeout = TimeSpan.FromMilliseconds(int.MaxValue) };
+
+        await using var client = new ClamAVClient(options);
+
+        Assert.NotNull(client);
+    }
+
+    /// <summary>
+    /// Verifies that a connect timeout in the string-command path (SCAN) is not retried.
+    /// </summary>
+    [Fact]
+    public async Task ScanFileAsync_ConnectTimesOut_ThrowsTimeoutExceptionWithoutRetry()
+    {
+        var attempts = 0;
+        await using var client = new ClamAVClient(
+            new() { Timeout = TimeSpan.FromSeconds(5) },
+            _ =>
+            {
+                Interlocked.Increment(ref attempts);
+                throw new SocketException((int)SocketError.TimedOut);
+            });
+
+        await Assert.ThrowsAsync<ClamConnectionTimeoutException>(() => client.ScanFileAsync("/tmp/file", TestCt));
+
+        Assert.Equal(1, attempts);
+    }
+
+    /// <summary>
+    /// Verifies that a connect timeout during a seekable stream scan is not retried.
+    /// </summary>
+    [Fact]
+    public async Task ScanStreamAsync_ConnectTimesOutOnSeekableStream_ThrowsTimeoutExceptionWithoutRetry()
+    {
+        var attempts = 0;
+        await using var client = new ClamAVClient(
+            new() { Timeout = TimeSpan.FromSeconds(5) },
+            _ =>
+            {
+                Interlocked.Increment(ref attempts);
+                throw new SocketException((int)SocketError.TimedOut);
+            });
+        var data = new MemoryStream("test"u8.ToArray());
+
+        await Assert.ThrowsAsync<ClamConnectionTimeoutException>(() => client.ScanStreamAsync(data, TestCt));
+
+        Assert.Equal(1, attempts);
+    }
+
+    /// <summary>
+    /// Verifies that a non-timeout connect failure is still retried once with a fresh connection.
+    /// </summary>
+    [Fact]
+    public async Task PingAsync_ConnectRefusedThenSucceeds_RetriesOnce()
+    {
+        await using var server = FakeClamdServer.Start("PONG\0");
+        var attempts = 0;
+        await using var client = new ClamAVClient(
+            new() { Timeout = TimeSpan.FromSeconds(5) },
+            async ct =>
+            {
+                if (Interlocked.Increment(ref attempts) == 1)
+                {
+                    throw new SocketException((int)SocketError.ConnectionRefused);
+                }
+
+                var tcp = new TcpClient();
+                await tcp.ConnectAsync("127.0.0.1", server.Port, ct);
+                return (Stream)tcp.GetStream();
+            });
+
+        var result = await client.PingAsync(TestCt);
+
+        Assert.True(result);
+        Assert.Equal(2, attempts);
+    }
+
+    /// <summary>
+    /// Verifies that <see cref="ClamConnectionTimeoutException"/> is a <see cref="ClamConnectionException"/> and preserves its inner exception.
+    /// </summary>
+    [Fact]
+    public void ClamConnectionTimeoutException_WithInner_IsConnectionExceptionAndKeepsInner()
+    {
+        var inner = new SocketException((int)SocketError.TimedOut);
+
+        var ex = new ClamConnectionTimeoutException("timed out", inner);
+
+        Assert.IsAssignableFrom<ClamConnectionException>(ex);
+        Assert.Equal("timed out", ex.Message);
+        Assert.Same(inner, ex.InnerException);
     }
 
     /// <summary>
