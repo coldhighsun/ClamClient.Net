@@ -14,6 +14,9 @@
     <File Path="README.md" />
     <File Path="README.zh-CN.md" />
   </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/ClamClient.Net.Benchmarks/ClamClient.Net.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/QuickStart/QuickStart.csproj" />
   </Folder>
