@@ -138,6 +138,37 @@ var options = new ClamClientOptions
 
 Dispose `ClamAVClient` (or the DI container) when the application exits — this sends `zEND\0` on every idle connection and closes the pool cleanly.
 
+### Benchmarks
+
+[`benchmarks/ClamClient.Net.Benchmarks`](benchmarks/ClamClient.Net.Benchmarks) uses [BenchmarkDotNet](https://benchmarkdotnet.org/) against a live clamd (default `localhost:3310`, override with `CLAMD_HOST` / `CLAMD_PORT`):
+
+```bash
+dotnet run -c Release --project benchmarks/ClamClient.Net.Benchmarks -- --filter "*"
+```
+
+Environment: BenchmarkDotNet 0.15.8, Windows 11, Intel Core i9-13980HX, .NET 10.0.15, ClamAV 1.5.4 on `localhost`. Scanned payloads are small in-memory streams, so the numbers mostly reflect connection and protocol overhead rather than scan-engine time.
+
+**Connection reuse** — sequential scans, one shared client vs. a new client (and TCP connection) per scan:
+
+| Method             | Payload | Mean    | Ratio | Allocated |
+|------------------- |--------:|--------:|------:|----------:|
+| NewClientPerScan   | 1 KB    | 4.97 ms | 1.00  | 10.51 KB  |
+| SharedPooledClient | 1 KB    | 1.70 ms | 0.35  | 1.30 KB   |
+| NewClientPerScan   | 256 KB  | 6.31 ms | 1.00  | 10.53 KB  |
+| SharedPooledClient | 256 KB  | 4.13 ms | 0.66  | 1.30 KB   |
+
+**Pool size** — 32 concurrent callers sharing one client, 1 KB payload, mean time and allocation per scan:
+
+| MaxConnections | Mean    | Allocated |
+|---------------:|--------:|----------:|
+| 1              | 1.90 ms | 1.46 KB   |
+| 2              | 1.25 ms | 1.46 KB   |
+| 5              | 1.17 ms | 1.45 KB   |
+| 10             | 1.10 ms | 1.44 KB   |
+| 0 (unlimited)  | 1.07 ms | 1.30 KB   |
+
+Reusing connections cuts per-scan time by about two thirds for small payloads and by about a third for 256 KB, and cuts allocations by roughly 88% (chunk and write buffers come from `ArrayPool`, so allocation does not grow with payload size). Throughput improves going from one to two connections and then flattens, because clamd itself becomes the bottleneck; results vary with hardware, network and clamd's `MaxThreads`.
+
 ## API reference
 
 ### `IClamClient`

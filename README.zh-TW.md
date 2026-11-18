@@ -138,6 +138,37 @@ var options = new ClamClientOptions
 
 應用程式結束時請 Dispose `ClamAVClient`（或 DI 容器）——這會向所有閒置連線傳送 `zEND\0` 並乾淨地關閉連線池。
 
+### 效能基準測試
+
+[`benchmarks/ClamClient.Net.Benchmarks`](benchmarks/ClamClient.Net.Benchmarks) 使用 [BenchmarkDotNet](https://benchmarkdotnet.org/) 對真實 clamd 進行測試（預設 `localhost:3310`，可透過 `CLAMD_HOST` / `CLAMD_PORT` 覆寫）：
+
+```bash
+dotnet run -c Release --project benchmarks/ClamClient.Net.Benchmarks -- --filter "*"
+```
+
+測試環境：BenchmarkDotNet 0.15.8、Windows 11、Intel Core i9-13980HX、.NET 10.0.15、本機 ClamAV 1.5.4。被掃描的是記憶體中的小型資料流，因此結果主要反映連線與通訊協定的開銷，而非掃描引擎耗時。
+
+**連線重複使用**——循序掃描，共用一個用戶端 vs. 每次掃描建立新用戶端（及 TCP 連線）：
+
+| 方法               | 負載   | 平均耗時 | 比值 | 記憶體配置 |
+|------------------- |-------:|---------:|-----:|-----------:|
+| NewClientPerScan   | 1 KB   | 4.97 ms  | 1.00 | 10.51 KB   |
+| SharedPooledClient | 1 KB   | 1.70 ms  | 0.35 | 1.30 KB    |
+| NewClientPerScan   | 256 KB | 6.31 ms  | 1.00 | 10.53 KB   |
+| SharedPooledClient | 256 KB | 4.13 ms  | 0.66 | 1.30 KB    |
+
+**連線池大小**——32 個並行呼叫端共用一個用戶端，1 KB 負載，每次掃描的平均耗時與記憶體配置：
+
+| MaxConnections | 平均耗時 | 記憶體配置 |
+|---------------:|---------:|-----------:|
+| 1              | 1.90 ms  | 1.46 KB    |
+| 2              | 1.25 ms  | 1.46 KB    |
+| 5              | 1.17 ms  | 1.45 KB    |
+| 10             | 1.10 ms  | 1.44 KB    |
+| 0（不限制）    | 1.07 ms  | 1.30 KB    |
+
+重複使用連線可使小負載的單次掃描耗時降低約三分之二，256 KB 負載約降低三分之一，記憶體配置減少約 88%（分塊緩衝區與寫入緩衝區皆來自 `ArrayPool`，因此配置量不隨負載大小增長）。連線數從 1 增加到 2 時吞吐明顯提升，之後趨於平緩，因為瓶頸已轉移到 clamd 本身；結果會因硬體、網路和 clamd 的 `MaxThreads` 而異。
+
 ## API 參考
 
 ### `IClamClient`
