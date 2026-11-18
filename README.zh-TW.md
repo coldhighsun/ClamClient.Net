@@ -113,7 +113,7 @@ var options = new ClamClientOptions
 };
 ```
 
-> Unix 網域通訊端需要 .NET 5 或更新版本。
+> Unix 網域通訊端僅支援 Linux 和 macOS；在 Windows 上呼叫 `ClamEndpoint.UnixSocket` 會擲出 `PlatformNotSupportedException`。
 
 ## 連線池
 

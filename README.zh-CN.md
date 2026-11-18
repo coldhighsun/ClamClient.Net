@@ -113,7 +113,7 @@ var options = new ClamClientOptions
 };
 ```
 
-> Unix 域套接字需要 .NET 5 或更高版本。
+> Unix 域套接字仅支持 Linux 和 macOS；在 Windows 上调用 `ClamEndpoint.UnixSocket` 会抛出 `PlatformNotSupportedException`。
 
 ## 连接池
 

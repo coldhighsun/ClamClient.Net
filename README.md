@@ -113,7 +113,7 @@ var options = new ClamClientOptions
 };
 ```
 
-> Unix domain sockets require .NET 5 or later.
+> Unix domain sockets are only supported on Linux and macOS; `ClamEndpoint.UnixSocket` throws `PlatformNotSupportedException` on Windows.
 
 ## Connection pool
 
