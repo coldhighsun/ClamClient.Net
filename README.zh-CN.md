@@ -138,6 +138,37 @@ var options = new ClamClientOptions
 
 应用退出时请 Dispose `ClamAVClient`（或 DI 容器）——这会向所有空闲连接发送 `zEND\0` 并干净地关闭连接池。
 
+### 基准测试
+
+[`benchmarks/ClamClient.Net.Benchmarks`](benchmarks/ClamClient.Net.Benchmarks) 使用 [BenchmarkDotNet](https://benchmarkdotnet.org/) 对真实 clamd 测试（默认 `localhost:3310`，可通过 `CLAMD_HOST` / `CLAMD_PORT` 覆盖）：
+
+```bash
+dotnet run -c Release --project benchmarks/ClamClient.Net.Benchmarks -- --filter "*"
+```
+
+测试环境：BenchmarkDotNet 0.15.8、Windows 11、Intel Core i9-13980HX、.NET 10.0.15、本机 ClamAV 1.5.4。被扫描的是内存中的小数据流，因此结果主要反映连接与协议开销，而非扫描引擎耗时。
+
+**连接复用**——顺序扫描，共享一个客户端 vs. 每次扫描新建客户端（及 TCP 连接）：
+
+| 方法               | 载荷   | 平均耗时 | 比值 | 内存分配 |
+|------------------- |-------:|---------:|-----:|---------:|
+| NewClientPerScan   | 1 KB   | 4.97 ms  | 1.00 | 10.51 KB |
+| SharedPooledClient | 1 KB   | 1.70 ms  | 0.35 | 1.30 KB  |
+| NewClientPerScan   | 256 KB | 6.31 ms  | 1.00 | 10.53 KB |
+| SharedPooledClient | 256 KB | 4.13 ms  | 0.66 | 1.30 KB  |
+
+**连接池大小**——32 个并发调用方共享一个客户端，1 KB 载荷，每次扫描的平均耗时与内存分配：
+
+| MaxConnections | 平均耗时 | 内存分配 |
+|---------------:|---------:|---------:|
+| 1              | 1.90 ms  | 1.46 KB  |
+| 2              | 1.25 ms  | 1.46 KB  |
+| 5              | 1.17 ms  | 1.45 KB  |
+| 10             | 1.10 ms  | 1.44 KB  |
+| 0（不限制）    | 1.07 ms  | 1.30 KB  |
+
+复用连接可使小载荷的单次扫描耗时降低约三分之二，256 KB 载荷约降低三分之一，内存分配减少约 88%（分块缓冲区和写入缓冲区均来自 `ArrayPool`，因此分配量不随载荷大小增长）。连接数从 1 增加到 2 时吞吐明显提升，之后趋于平缓，因为瓶颈已转移到 clamd 自身；结果会因硬件、网络和 clamd 的 `MaxThreads` 而异。
+
 ## API 参考
 
 ### `IClamClient`
