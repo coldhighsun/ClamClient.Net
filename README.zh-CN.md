@@ -20,7 +20,7 @@
 
 ## 环境要求
 
-- .NET Standard 2.0 或 .NET 8+
+- .NET 8 或更高版本
 - 正在运行的 [clamd](https://docs.clamav.net/manual/Usage/Scanning.html#clamd) 守护进程
 
 本地快速启动守护进程：

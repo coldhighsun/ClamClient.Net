@@ -93,11 +93,7 @@ internal sealed class ClamConnection : IAsyncDisposable
             }
         }
 
-#if !NETSTANDARD2_0
         await _stream.DisposeAsync().ConfigureAwait(false);
-#else
-        _stream.Dispose();
-#endif
     }
 
     /// <summary>

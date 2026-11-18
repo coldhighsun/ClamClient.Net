@@ -152,28 +152,19 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
 
         if (endpoint.IsUnixSocket)
         {
-#if !NETSTANDARD2_0
             var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
             socket.SendTimeout = timeoutMs;
             socket.ReceiveTimeout = timeoutMs;
             await socket.ConnectAsync(new UnixDomainSocketEndPoint(endpoint.UnixSocketPath!), cancellationToken)
                 .ConfigureAwait(false);
             return new NetworkStream(socket, ownsSocket: true);
-#else
-            throw new PlatformNotSupportedException("Unix domain sockets require .NET 5 or later.");
-#endif
         }
 
         var client = new TcpClient();
         client.SendTimeout = timeoutMs;
         client.ReceiveTimeout = timeoutMs;
 
-#if !NETSTANDARD2_0
         await client.ConnectAsync(endpoint.Host!, endpoint.Port, cancellationToken).ConfigureAwait(false);
-#else
-        // CancellationToken overload not available; connect synchronously on the thread-pool
-        await Task.Run(() => client.Connect(endpoint.Host!, endpoint.Port), cancellationToken).ConfigureAwait(false);
-#endif
         return client.GetStream();
     }
 

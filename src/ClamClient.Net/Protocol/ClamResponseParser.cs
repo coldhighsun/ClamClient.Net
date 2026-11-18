@@ -23,11 +23,7 @@ internal static class ClamResponseParser
     internal static ScanResult ParseScanResponse(string raw)
     {
         var trimmed = raw.Trim('\0', '\n', '\r');
-#if !NETSTANDARD2_0
         var lines = trimmed.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-#else
-        var lines = trimmed.Split(['\n'], StringSplitOptions.RemoveEmptyEntries);
-#endif
 
         if (lines.Length == 0)
         {
