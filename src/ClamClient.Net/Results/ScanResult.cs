@@ -15,7 +15,7 @@ public sealed class ScanResult
     {
         Status = status;
         RawResponse = rawResponse;
-        Threats = threats ?? Array.Empty<DetectedThreat>();
+        Threats = threats ?? [];
     }
 
     /// <summary>

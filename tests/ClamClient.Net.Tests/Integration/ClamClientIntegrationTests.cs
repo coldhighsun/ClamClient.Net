@@ -232,7 +232,7 @@ public sealed class ClamClientIntegrationTests
         await client.ScanStreamAsync(data, TestCt);
 
         // Command starts with "zINSTREAM\0"
-        var sentText = Encoding.ASCII.GetString(server.ReceivedBytes.Take(10).ToArray());
+        var sentText = Encoding.ASCII.GetString([.. server.ReceivedBytes.Take(10)]);
         Assert.Equal("zINSTREAM\0", sentText);
     }
 

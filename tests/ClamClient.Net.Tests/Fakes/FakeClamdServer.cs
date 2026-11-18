@@ -62,7 +62,7 @@ internal sealed class FakeClamdServer : IAsyncDisposable
         var offset = 0;
         while (offset < buffer.Length)
         {
-            var read = await stream.ReadAsync(buffer, offset, buffer.Length - offset, ct).ConfigureAwait(false);
+            var read = await stream.ReadAsync(buffer.AsMemory(offset, buffer.Length - offset), ct).ConfigureAwait(false);
             if (read == 0)
             {
                 throw new EndOfStreamException("Connection closed before all bytes were received.");
@@ -97,7 +97,7 @@ internal sealed class FakeClamdServer : IAsyncDisposable
         var buf = new byte[1];
         while (true)
         {
-            var read = await stream.ReadAsync(buf, 0, 1, ct).ConfigureAwait(false);
+            var read = await stream.ReadAsync(buf.AsMemory(0, 1), ct).ConfigureAwait(false);
             if (read == 0)
             {
                 return ms.Length > 0; // false if nothing was read yet
@@ -199,7 +199,7 @@ internal sealed class FakeClamdServer : IAsyncDisposable
                     var responseBytes = Encoding.ASCII.GetBytes(prefixed);
                     try
                     {
-                        await stream.WriteAsync(responseBytes, 0, responseBytes.Length, _cts.Token).ConfigureAwait(false);
+                        await stream.WriteAsync(responseBytes, _cts.Token).ConfigureAwait(false);
                         await stream.FlushAsync(_cts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)

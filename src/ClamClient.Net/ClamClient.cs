@@ -115,10 +115,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     /// <inheritdoc/>
     public async Task<ScanResult> ScanStreamAsync(Stream data, CancellationToken cancellationToken = default)
     {
-        if (data is null)
-        {
-            throw new ArgumentNullException(nameof(data));
-        }
+        ArgumentNullException.ThrowIfNull(data);
 
         var startPosition = data.CanSeek ? data.Position : -1L;
 
@@ -175,7 +172,6 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A stream representing the open connection.</returns>
-    [SuppressMessage("Reliability", "CA2000", Justification = "Ownership transferred to NetworkStream via ownsSocket: true")]
     private async Task<Stream> ConnectAsync(CancellationToken cancellationToken)
     {
         var endpoint = _options.Endpoint;
