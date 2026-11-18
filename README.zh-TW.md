@@ -3,6 +3,8 @@
 # ClamClient.Net
 
 [![CI](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml/badge.svg)](https://github.com/coldhighsun/ClamClient.Net/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/coldhighsun/ClamClient.Net/graph/badge.svg)](https://codecov.io/gh/coldhighsun/ClamClient.Net)
+[![Tests](https://img.shields.io/badge/tests-110%20passed-brightgreen)](https://github.com/coldhighsun/ClamClient.Net/tree/main/tests/ClamClient.Net.Tests)
 [![NuGet](https://img.shields.io/nuget/v/ClamClient.Net.svg)](https://www.nuget.org/packages/ClamClient.Net)
 [![NuGet Downloads](https://img.shields.io/nuget/dt/ClamClient.Net.svg)](https://www.nuget.org/packages/ClamClient.Net)
 [![Latest Release](https://img.shields.io/github/v/release/coldhighsun/ClamClient.Net?sort=semver)](https://github.com/coldhighsun/ClamClient.Net/releases/latest)
