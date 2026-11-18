@@ -20,7 +20,7 @@ Async .NET client library for [ClamAV](https://www.clamav.net/) (`clamd`) with T
 
 ## Requirements
 
-- .NET Standard 2.0 or .NET 8+
+- .NET 8 or later
 - A running [clamd](https://docs.clamav.net/manual/Usage/Scanning.html#clamd) daemon
 
 Quick way to get a daemon running locally:

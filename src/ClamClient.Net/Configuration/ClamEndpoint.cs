@@ -64,18 +64,10 @@ public sealed class ClamEndpoint
     /// </summary>
     public static ClamEndpoint UnixSocket(string path)
     {
-#if !NETSTANDARD2_0
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
             throw new PlatformNotSupportedException("Unix domain sockets are only supported on Linux and macOS.");
         }
-#else
-        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux) &&
-            !System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX))
-        {
-            throw new PlatformNotSupportedException("Unix domain sockets are only supported on Linux and macOS.");
-        }
-#endif
         return new(path);
     }
 

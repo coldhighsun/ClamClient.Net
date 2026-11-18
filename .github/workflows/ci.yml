@@ -27,7 +27,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.x
+          dotnet-version: |
+            8.x
+            10.x
 
       - run: dotnet restore
       - run: dotnet build --no-restore -c Debug
@@ -46,7 +48,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.x
+          dotnet-version: |
+            8.x
+            10.x
 
       - run: dotnet pack src/ClamClient.Net/ClamClient.Net.csproj -c Release -o ./artifacts
 
