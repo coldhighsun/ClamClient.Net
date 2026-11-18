@@ -7,6 +7,7 @@ public sealed class ClamClientOptions
 {
     /// <summary>
     /// Maximum bytes per INSTREAM chunk. Defaults to 128 KB.
+    /// Must be positive and small enough to leave room for the 4-byte length prefix (validated when the client is created).
     /// Must not exceed clamd's StreamMaxLength setting.
     /// </summary>
     public int ChunkSize { get; set; } = 128 * 1024;
@@ -27,7 +28,7 @@ public sealed class ClamClientOptions
     public int MaxConnections { get; set; } = 10;
 
     /// <summary>
-    /// Hard cap on total INSTREAM payload size. Defaults to 25 MB.
+    /// Hard cap on total INSTREAM payload size. Must be positive (validated when the client is created). Defaults to 25 MB.
     /// </summary>
     public long MaxStreamSize { get; set; } = 25L * 1024 * 1024;
 

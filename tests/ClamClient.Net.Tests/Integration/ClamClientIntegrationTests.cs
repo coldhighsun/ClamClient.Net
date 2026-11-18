@@ -412,6 +412,35 @@ public sealed class ClamClientIntegrationTests
     }
 
     /// <summary>
+    /// Verifies that a non-positive or overflowing chunk size is rejected when the client is constructed.
+    /// </summary>
+    /// <param name="chunkSize">The invalid chunk size.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(int.MaxValue)]
+    public void Constructor_InvalidChunkSize_ThrowsArgumentOutOfRangeException(int chunkSize)
+    {
+        var options = new ClamClientOptions { ChunkSize = chunkSize };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ClamAVClient(options));
+    }
+
+    /// <summary>
+    /// Verifies that a non-positive maximum stream size is rejected when the client is constructed.
+    /// </summary>
+    /// <param name="maxStreamSize">The invalid maximum stream size.</param>
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void Constructor_InvalidMaxStreamSize_ThrowsArgumentOutOfRangeException(long maxStreamSize)
+    {
+        var options = new ClamClientOptions { MaxStreamSize = maxStreamSize };
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ClamAVClient(options));
+    }
+
+    /// <summary>
     /// Verifies that a stream rejected as too large before the buffered request is flushed sends no command to clamd.
     /// </summary>
     [Fact]

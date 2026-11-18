@@ -33,7 +33,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     /// Initializes a new instance with the supplied options.
     /// </summary>
     /// <param name="options">The client options.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="ClamClientOptions.Timeout"/> is not positive or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="ClamClientOptions.Timeout"/> is not positive or exceeds <see cref="int.MaxValue"/> milliseconds, or when <see cref="ClamClientOptions.ChunkSize"/> or <see cref="ClamClientOptions.MaxStreamSize"/> is out of range.</exception>
     public ClamAVClient(ClamClientOptions options)
         : this(options, streamFactory: null)
     {
@@ -44,7 +44,7 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
     /// </summary>
     /// <param name="options">The client options.</param>
     /// <param name="streamFactory">Opens a new stream to clamd; when <see langword="null"/>, the endpoint from <paramref name="options"/> is used.</param>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="ClamClientOptions.Timeout"/> is not positive or exceeds <see cref="int.MaxValue"/> milliseconds.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="ClamClientOptions.Timeout"/> is not positive or exceeds <see cref="int.MaxValue"/> milliseconds, or when <see cref="ClamClientOptions.ChunkSize"/> or <see cref="ClamClientOptions.MaxStreamSize"/> is out of range.</exception>
     internal ClamAVClient(ClamClientOptions options, Func<CancellationToken, Task<Stream>>? streamFactory)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -52,6 +52,19 @@ public sealed class ClamAVClient : IClamClient, IAsyncDisposable
         {
             throw new ArgumentOutOfRangeException(
                 "options.Timeout", options.Timeout, "Timeout must be positive and at most int.MaxValue milliseconds.");
+        }
+
+        // The INSTREAM buffer is chunkSize + 4 bytes (length prefix), so the chunk size must leave room for it.
+        if (options.ChunkSize <= 0 || options.ChunkSize > Array.MaxLength - 4)
+        {
+            throw new ArgumentOutOfRangeException(
+                "options.ChunkSize", options.ChunkSize, "ChunkSize must be positive and leave room for the 4-byte length prefix.");
+        }
+
+        if (options.MaxStreamSize <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                "options.MaxStreamSize", options.MaxStreamSize, "MaxStreamSize must be positive.");
         }
 
         _timeout = options.Timeout;
